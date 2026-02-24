@@ -1,0 +1,610 @@
+{
+  "name": "Vyriy House — Telegram Income Bot",
+  "flow": [
+    {
+      "id": 1,
+      "module": "telegram-bot-sdk:TriggerNewUpdates",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}",
+        "filter": "message"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": {},
+        "expect": [
+          { "name": "message", "type": "collection" }
+        ]
+      },
+      "label": "Watch Group Messages"
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicFeeder",
+      "version": 1,
+      "parameters": {},
+      "filter": {
+        "name": "Has Photo?",
+        "conditions": [
+          [
+            {
+              "a": "{{1.message.photo}}",
+              "o": "exist"
+            }
+          ]
+        ]
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 200, "y": 0 },
+        "restore": {}
+      },
+      "label": "Filter: Photo Only"
+    },
+    {
+      "id": 3,
+      "module": "telegram-bot-sdk:GetFile",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "file_id": "{{last(1.message.photo).file_id}}"
+      },
+      "metadata": {
+        "designer": { "x": 400, "y": 0 },
+        "restore": {}
+      },
+      "label": "Get Photo File"
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true
+      },
+      "mapper": {
+        "url": "https://api.telegram.org/file/bot{{connection.telegram.token}}/{{3.file_path}}",
+        "method": "GET",
+        "bodyType": "raw",
+        "parseResponse": false
+      },
+      "metadata": {
+        "designer": { "x": 600, "y": 0 },
+        "restore": {}
+      },
+      "label": "Download Photo as Binary"
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "showAdvanced": true
+      },
+      "mapper": {
+        "url": "https://vision.googleapis.com/v1/images:annotate?key={{connection.google_vision_api_key}}",
+        "method": "POST",
+        "headers": [
+          { "name": "content-type", "value": "application/json" }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "body": "{\"requests\":[{\"image\":{\"content\":\"{{toBase64(4.data)}}\"},\"features\":[{\"type\":\"TEXT_DETECTION\",\"maxResults\":1}],\"imageContext\":{\"languageHints\":[\"uk\",\"ru\"]}}]}",
+        "parseResponse": true
+      },
+      "metadata": {
+        "designer": { "x": 800, "y": 0 },
+        "restore": {}
+      },
+      "label": "Google Vision OCR — Extract Text"
+    },
+    {
+      "id": 6,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "raw_ocr_text",
+        "value": "{{5.data.responses[].fullTextAnnotation.text}}"
+      },
+      "metadata": {
+        "designer": { "x": 900, "y": 0 },
+        "restore": {}
+      },
+      "label": "Extract Raw OCR Text"
+    },
+    {
+      "id": 6,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "parsed",
+        "scope": "roundtrip",
+        "value": {
+          "sender_name": "{{trim(replace(replace(regexGet(6.raw_ocr_text, '(?:Від|від|От|від кого)[:\\s]+([^\\n]+)', 1), 'Від:', ''), 'від:', ''))}}",
+          "amount": "{{toNumber(replace(replace(regexGet(6.raw_ocr_text, '([\\d\\s]+[,.]?\\d*)\\s*(?:₴|грн|UAH)', 1), ' ', ''), ',', '.'))}}",
+          "currency": "UAH",
+          "date": "{{regexGet(6.raw_ocr_text, '(\\d{2}[./]\\d{2}[./]\\d{4})', 1)}}",
+          "purpose": "{{trim(regexGet(6.raw_ocr_text, '(?:Призначення|Коментар|Повідомлення|призначення)[:\\s]+([^\\n]+)', 1))}}"
+        }
+      },
+      "metadata": {
+        "designer": { "x": 1000, "y": 0 },
+        "restore": {}
+      },
+      "label": "Parse Fields from OCR Text"
+    },
+    {
+      "id": 7,
+      "module": "telegram-bot-sdk:ActionSendMessage",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "chat_id": "{{1.message.chat.id}}",
+        "text": "💳 *Отримано платіж*\n\n👤 Від: {{6.sender_name}}\n💰 Сума: {{6.amount}} {{6.currency}}\n📅 Дата: {{6.date}}\n📝 Призначення: {{6.purpose}}\n\n🏠 *До якого об'єкту відноситься?*",
+        "parse_mode": "Markdown",
+        "reply_markup": "{\"inline_keyboard\":[[{\"text\":\"🏠 Гніздечко\",\"callback_data\":\"prop_gnizd\"},{\"text\":\"🐦 Чайка\",\"callback_data\":\"prop_chaika\"}],[{\"text\":\"🦢 Чапля\",\"callback_data\":\"prop_chaplia\"},{\"text\":\"🏄 SUP Rental\",\"callback_data\":\"prop_sup\"}],[{\"text\":\"⏭ Пропустити\",\"callback_data\":\"prop_skip\"}]]}"
+      },
+      "metadata": {
+        "designer": { "x": 1200, "y": 0 },
+        "restore": {}
+      },
+      "label": "Ask: Property"
+    },
+    {
+      "id": 8,
+      "module": "telegram-bot-sdk:TriggerNewUpdates",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}",
+        "filter": "callback_query"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 1400, "y": 0 },
+        "restore": {}
+      },
+      "label": "Wait: Property Button Press"
+    },
+    {
+      "id": 9,
+      "module": "telegram-bot-sdk:ActionAnswerCallbackQuery",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "callback_query_id": "{{8.callback_query.id}}"
+      },
+      "metadata": {
+        "designer": { "x": 1600, "y": 0 },
+        "restore": {}
+      },
+      "label": "Dismiss Loading Spinner"
+    },
+    {
+      "id": 10,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 1800, "y": 0 },
+        "restore": {}
+      },
+      "label": "Router: Property Type"
+    },
+    {
+      "id": 11,
+      "module": "telegram-bot-sdk:ActionSendMessage",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "filter": {
+        "name": "Is SUP?",
+        "conditions": [[{ "a": "{{8.callback_query.data}}", "o": "equal", "b": "prop_sup" }]]
+      },
+      "mapper": {
+        "chat_id": "{{1.message.chat.id}}",
+        "text": "🏄 *SUP Rental — оберіть тривалість:*",
+        "parse_mode": "Markdown",
+        "reply_markup": "{\"inline_keyboard\":[[{\"text\":\"⏱ 1 година\",\"callback_data\":\"dur_1h\"},{\"text\":\"⏱ 2 години\",\"callback_data\":\"dur_2h\"}],[{\"text\":\"⏱ 3 години\",\"callback_data\":\"dur_3h\"},{\"text\":\"🌅 Пів дня (4г)\",\"callback_data\":\"dur_halfday\"}],[{\"text\":\"☀️ Весь день\",\"callback_data\":\"dur_fullday\"},{\"text\":\"⏭ Пропустити\",\"callback_data\":\"dur_skip\"}]]}"
+      },
+      "metadata": {
+        "designer": { "x": 2000, "y": -200 },
+        "restore": {}
+      },
+      "label": "Ask: SUP Duration"
+    },
+    {
+      "id": 12,
+      "module": "telegram-bot-sdk:TriggerNewUpdates",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}",
+        "filter": "callback_query"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 2200, "y": -200 },
+        "restore": {}
+      },
+      "label": "Wait: Duration Button Press"
+    },
+    {
+      "id": 13,
+      "module": "telegram-bot-sdk:ActionAnswerCallbackQuery",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "callback_query_id": "{{12.callback_query.id}}"
+      },
+      "metadata": {
+        "designer": { "x": 2400, "y": -200 },
+        "restore": {}
+      },
+      "label": "Dismiss SUP Spinner"
+    },
+    {
+      "id": 14,
+      "module": "telegram-bot-sdk:ActionSendMessage",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "filter": {
+        "name": "Is Property (not SUP)?",
+        "conditions": [[
+          { "a": "{{8.callback_query.data}}", "o": "not-equal", "b": "prop_sup" },
+          { "a": "{{8.callback_query.data}}", "o": "not-equal", "b": "prop_skip" }
+        ]]
+      },
+      "mapper": {
+        "chat_id": "{{1.message.chat.id}}",
+        "text": "💳 *Тип платежу:*",
+        "parse_mode": "Markdown",
+        "reply_markup": "{\"inline_keyboard\":[[{\"text\":\"💰 Передоплата\",\"callback_data\":\"pay_prepay\"},{\"text\":\"💵 Доплата\",\"callback_data\":\"pay_balance\"}],[{\"text\":\"✅ Оплата (повна)\",\"callback_data\":\"pay_full\"},{\"text\":\"⏭ Пропустити\",\"callback_data\":\"pay_skip\"}]]}"
+      },
+      "metadata": {
+        "designer": { "x": 2000, "y": 0 },
+        "restore": {}
+      },
+      "label": "Ask: Payment Type (Property)"
+    },
+    {
+      "id": 15,
+      "module": "telegram-bot-sdk:TriggerNewUpdates",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}",
+        "filter": "callback_query"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 2200, "y": 0 },
+        "restore": {}
+      },
+      "label": "Wait: Payment Type Press"
+    },
+    {
+      "id": 16,
+      "module": "telegram-bot-sdk:ActionAnswerCallbackQuery",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "callback_query_id": "{{15.callback_query.id}}"
+      },
+      "metadata": {
+        "designer": { "x": 2400, "y": 0 },
+        "restore": {}
+      },
+      "label": "Dismiss Payment Spinner"
+    },
+    {
+      "id": 17,
+      "module": "telegram-bot-sdk:ActionSendMessage",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "chat_id": "{{1.message.chat.id}}",
+        "text": "📅 *Введіть дати бронювання* (необов'язково):\n\nФормат:\n`ЧЕК-ІН: 22.02.2026`\n`ЧЕК-АУТ: 25.02.2026`\n\nАбо надішліть ⏭ для пропуску",
+        "parse_mode": "Markdown",
+        "reply_markup": "{\"inline_keyboard\":[[{\"text\":\"⏭ Пропустити дати\",\"callback_data\":\"dates_skip\"}]]}"
+      },
+      "metadata": {
+        "designer": { "x": 2600, "y": 0 },
+        "restore": {}
+      },
+      "label": "Ask: Check-in / Check-out"
+    },
+    {
+      "id": 18,
+      "module": "telegram-bot-sdk:TriggerNewUpdates",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}",
+        "filter": "message"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 2800, "y": 0 },
+        "restore": {}
+      },
+      "label": "Wait: Dates Text or Skip"
+    },
+    {
+      "id": 19,
+      "module": "telegram-bot-sdk:ActionSendMessage",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "chat_id": "{{1.message.chat.id}}",
+        "text": "🌐 *Платформа:*",
+        "parse_mode": "Markdown",
+        "reply_markup": "{\"inline_keyboard\":[[{\"text\":\"📸 Instagram (INST)\",\"callback_data\":\"plat_inst\"},{\"text\":\"🏨 Booking.com (BC)\",\"callback_data\":\"plat_bc\"}],[{\"text\":\"✈️ Airbnb\",\"callback_data\":\"plat_airbnb\"},{\"text\":\"🔗 HutsHub\",\"callback_data\":\"plat_hutshub\"}],[{\"text\":\"📞 Прямий дзвінок\",\"callback_data\":\"plat_direct\"},{\"text\":\"⏭ Пропустити\",\"callback_data\":\"plat_skip\"}]]}"
+      },
+      "metadata": {
+        "designer": { "x": 3000, "y": 0 },
+        "restore": {}
+      },
+      "label": "Ask: Platform"
+    },
+    {
+      "id": 20,
+      "module": "telegram-bot-sdk:TriggerNewUpdates",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}",
+        "filter": "callback_query"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 3200, "y": 0 },
+        "restore": {}
+      },
+      "label": "Wait: Platform Button Press"
+    },
+    {
+      "id": 21,
+      "module": "telegram-bot-sdk:ActionAnswerCallbackQuery",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "callback_query_id": "{{20.callback_query.id}}"
+      },
+      "metadata": {
+        "designer": { "x": 3400, "y": 0 },
+        "restore": {}
+      },
+      "label": "Dismiss Platform Spinner"
+    },
+    {
+      "id": 22,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "property_label",
+        "value": "{{switch(8.callback_query.data, 'prop_gnizd', 'Гніздечко', 'prop_chaika', 'Чайка', 'prop_chaplia', 'Чапля', 'prop_sup', 'SUP Rental', '')}}"
+      },
+      "metadata": {
+        "designer": { "x": 3600, "y": 0 },
+        "restore": {}
+      },
+      "label": "Map: Property Label"
+    },
+    {
+      "id": 23,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "payment_type_label",
+        "value": "{{switch(15.callback_query.data, 'pay_prepay', 'Передоплата', 'pay_balance', 'Доплата', 'pay_full', 'Оплата', '')}}"
+      },
+      "metadata": {
+        "designer": { "x": 3800, "y": 0 },
+        "restore": {}
+      },
+      "label": "Map: Payment Type Label"
+    },
+    {
+      "id": 24,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "platform_label",
+        "value": "{{switch(20.callback_query.data, 'plat_inst', 'INST', 'plat_bc', 'BC', 'plat_airbnb', 'Airbnb', 'plat_hutshub', 'HutsHub', 'plat_direct', 'Direct', '')}}"
+      },
+      "metadata": {
+        "designer": { "x": 4000, "y": 0 },
+        "restore": {}
+      },
+      "label": "Map: Platform Label"
+    },
+    {
+      "id": 25,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "sup_duration_label",
+        "value": "{{switch(12.callback_query.data, 'dur_1h', '1 година', 'dur_2h', '2 години', 'dur_3h', '3 години', 'dur_halfday', 'Пів дня (4г)', 'dur_fullday', 'Весь день', '')}}"
+      },
+      "metadata": {
+        "designer": { "x": 4200, "y": -200 },
+        "restore": {}
+      },
+      "label": "Map: SUP Duration Label"
+    },
+    {
+      "id": 26,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "checkin_date",
+        "value": "{{if(contains(18.message.text, 'ЧЕК-ІН'), trim(split(split(18.message.text, 'ЧЕК-ІН:')[1], '\n')[0]), '')}}"
+      },
+      "metadata": {
+        "designer": { "x": 4000, "y": 200 },
+        "restore": {}
+      },
+      "label": "Parse: Check-in Date"
+    },
+    {
+      "id": 27,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "checkout_date",
+        "value": "{{if(contains(18.message.text, 'ЧЕК-АУТ'), trim(split(split(18.message.text, 'ЧЕК-АУТ:')[1], '\n')[0]), '')}}"
+      },
+      "metadata": {
+        "designer": { "x": 4200, "y": 200 },
+        "restore": {}
+      },
+      "label": "Parse: Check-out Date"
+    },
+    {
+      "id": 28,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "account_type",
+        "value": "{{if(8.callback_query.data = 'prop_sup', if(contains(toLower(6.purpose), 'готівка'), 'Cash', 'Account'), 'Account')}}"
+      },
+      "metadata": {
+        "designer": { "x": 4400, "y": 0 },
+        "restore": {}
+      },
+      "label": "Map: Account Type"
+    },
+    {
+      "id": 29,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "month_label",
+        "value": "{{formatDate(parseDate(6.date, 'DD.MM.YYYY'), 'MMMM YYYY')}}"
+      },
+      "metadata": {
+        "designer": { "x": 4600, "y": 0 },
+        "restore": {}
+      },
+      "label": "Calculate: Month Label"
+    },
+    {
+      "id": 30,
+      "module": "google-sheets:ActionAddRow",
+      "version": 2,
+      "parameters": {
+        "config": "{{connection.google_sheets}}"
+      },
+      "mapper": {
+        "spreadsheetId": "YOUR_SPREADSHEET_ID_HERE",
+        "sheetName": "Доходи",
+        "values": {
+          "Date": "{{formatDate(parseDate(6.date, 'DD.MM.YYYY'), 'YYYY-MM-DD')}} 0:00:00",
+          "Day#": "",
+          "Amount": "{{6.amount}}",
+          "Property": "{{22.property_label}}",
+          "Platform": "{{24.platform_label}}",
+          "Guest Name": "{{6.sender_name}}",
+          "Nights": "",
+          "Check-in": "{{26.checkin_date}}",
+          "Check-out": "{{27.checkout_date}}",
+          "Payment Type": "{{if(8.callback_query.data = 'prop_sup', 'Сапи', 23.payment_type_label)}}",
+          "Account Type": "{{28.account_type}}",
+          "Notes": "{{if(8.callback_query.data = 'prop_sup', concat('Тривалість: ', 25.sup_duration_label), 6.purpose)}}",
+          "Month": "{{29.month_label}}"
+        }
+      },
+      "metadata": {
+        "designer": { "x": 4800, "y": 0 },
+        "restore": {}
+      },
+      "label": "Google Sheets — Add Income Row"
+    },
+    {
+      "id": 31,
+      "module": "telegram-bot-sdk:ActionSendMessage",
+      "version": 1,
+      "parameters": {
+        "config": "{{connection.telegram}}"
+      },
+      "mapper": {
+        "chat_id": "{{1.message.chat.id}}",
+        "text": "{{if(8.callback_query.data = 'prop_sup', concat('✅ *SUP Rental записано*\n\n🏄 Об\\'єкт: SUP Rental\n💰 Сума: ', 6.amount, ' ', 6.currency, '\n👤 Від: ', 6.sender_name, '\n⏱ Тривалість: ', 25.sup_duration_label, '\n📅 Дата: ', 6.date, '\n🗂 Тип: Сапи'), concat('✅ *Записано в Google Sheets*\n\n🏠 Об\\'єкт: ', 22.property_label, '\n💰 Сума: ', 6.amount, ' ', 6.currency, '\n👤 Від: ', 6.sender_name, '\n💳 Тип: ', 23.payment_type_label, '\n🌐 Платформа: ', 24.platform_label, if(26.checkin_date, concat('\n📅 Чек-ін: ', 26.checkin_date), ''), if(27.checkout_date, concat('\n📅 Чек-аут: ', 27.checkout_date), ''), '\n📆 Місяць: ', 29.month_label)}}",
+        "parse_mode": "Markdown"
+      },
+      "metadata": {
+        "designer": { "x": 5000, "y": 0 },
+        "restore": {}
+      },
+      "label": "Send Confirmation"
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  },
+  "_vyriy_setup_notes": {
+    "step_1_connections_needed": [
+      "telegram — create via BotFather, paste Bot Token",
+      "google_vision_api_key — from console.cloud.google.com, stored as URL query param variable",
+      "google_sheets — OAuth connection to your Google account"
+    ],
+    "step_2_enable_google_vision": "Go to console.cloud.google.com → APIs & Services → Enable 'Cloud Vision API' → Create API Key → store as connection.google_vision_api_key in Make.com",
+    "step_3_replace_placeholder": "Replace YOUR_SPREADSHEET_ID_HERE in module 30 with your actual Google Sheets ID (found in the URL: docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit)",
+    "step_4_sheet_tab_name": "Make sure the tab in your Google Sheet is named exactly: Доходи",
+    "step_5_column_headers_required": [
+      "Date", "Day#", "Amount", "Property", "Platform",
+      "Guest Name", "Nights", "Check-in", "Check-out",
+      "Payment Type", "Account Type", "Notes", "Month"
+    ],
+    "step_6_ocr_parsing_note": "Module 5 sends image to Google Vision TEXT_DETECTION with Ukrainian language hint. Module 6 extracts raw text. Module 6b uses regex to parse sender_name, amount, date, purpose from Monobank's consistent layout. If a field is not found, regex returns empty string.",
+    "step_7_SUP_flow": "SUP branch (modules 11-13, 25) runs instead of property modules 14-17 when prop_sup is selected. Duration is stored in Notes column as 'Тривалість: X'",
+    "step_8_account_type_logic": "Account Type auto-sets to Cash if purpose contains 'готівка', otherwise Account.",
+    "step_9_dates_skip_handling": "If user presses 'Пропустити дати' button, module 18 catches the callback_query instead of text — Check-in and Check-out will be empty strings in Sheets",
+    "step_10_day_hash_and_nights": "Day# and Nights columns are left empty — calculated via Sheets formulas",
+    "ocr_used": "Google Cloud Vision API — TEXT_DETECTION with languageHints: ['uk', 'ru']",
+    "cost": "Google Vision: first 1000 images/month FREE, then $1.50 per 1000. At 100 images/month = $0.00"
+  }
+}
