@@ -140,81 +140,79 @@ User types dates as text, or presses skip.
 
 ---
 
-## Flow 3: Expense Entry (`/витрата`)
+## Flow 3: Expense Entry (`/expense`)
 
-**Trigger:** User types `/витрата` in the group chat.
+**Trigger:** User types `/expense` in the group chat.
 
-### Step-by-step user experience:
+**Fast entry:** `/expense category;amount;description;paid_by` (e.g. `/expense Laundry;850;Towel washing;Nestor`)
+
+### Step-by-step user experience (interactive):
 
 **1. Category:**
 
 ```
 📂 Категорія витрати:
 
-[🧹 Прибирання]      [💡 Комунальні]
-[🔧 Обслуговування]  [📦 Матеріали]
-[📣 Маркетинг]       [📋 Інше]
+[🧺 Laundry]          [🛁 Guest Amenities]
+[💡 Utilities]         [📣 Marketing]
+[💼 Management Fee]    [🔧 Maintenance]
+[🏗 Capital Expenses]  [💸 Commissions]
+[🧹 Cleaning & Admin]  [🧪 Chemicals]
+[💻 Software]          [🏦 Depreciation fund]
+[📋 Taxes]             [📋 Other]
 ```
 
-**2. Property:**
+**2.** Bot asks: `💰 Введіть суму (в грн):` → User types amount
 
-```
-🏠 Об'єкт:
+**3.** Bot asks: `📝 Введіть опис витрати:` → User types description
 
-[🏠 Гніздечко] [🐦 Чайка]
-[🦢 Чапля]     [🏘 Всі]
-[⏭ Пропустити]
-```
-
-**3.** Bot asks: `💰 Введіть суму (в грн):` → User types amount
-
-**4.** Bot asks: `🏪 Назва постачальника/виконавця (або натисніть Пропустити):` → User types vendor name or presses skip button
-
-**5. Payment method:**
+**4. Payment method:**
 
 ```
 💳 Спосіб оплати:
 
-[💵 Готівка]  [🏦 Рахунок]
+[💵 Cash]  [🏦 Bank Transfer]
+```
+
+**5. Paid By:**
+
+```
+👤 Хто оплатив?
+
+[👤 Nestor]  [👤 Ihor]
+[👤 Ira]     [👤 Other]
+[🏦 Account]
 ```
 
 **6. Receipt (optional):**
 
 ```
-📎 Надішліть фото чеку для завантаження, або пропустіть:
+📎 Чек (необов'язково):
+
+Завантажте фото чеку на Google Drive та надішліть посилання.
+Або натисніть Пропустити.
 
 [⏭ Пропустити]
 ```
 
-If user sends a photo:
-- Bot uploads it to a shared Google Drive folder
-- Filename: `receipt_YYYYMMDD_HHMMSS.jpg`
-- Sets "anyone with link can view" permission
-- Stores the shareable URL
-
-**7.** Bot asks: `📝 Додайте нотатку (або натисніть Пропустити):` → User types note or skips
-
-**8. Confirmation:**
+**7. Confirmation:**
 
 ```
 ✅ Витрату записано
 
-📂 Категорія: Прибирання
-🏠 Об'єкт: Гніздечко
+📂 Категорія: Laundry
 💰 Сума: 850,00 ₴
-🏪 Виконавець: Марія
-💳 Оплата: Готівка
-📎 Чек: https://drive.google.com/file/d/xxx/view
-📝 Нотатка: прибирання після гостей
+📝 Опис: Towel washing
+💳 Оплата: Cash
+👤 Оплатив: Nestor
 ```
 
 **What gets written:**
 
 | Where | Data |
 |---|---|
-| PostgreSQL `transactions` | type=expense, all fields, receipt_url, source=manual |
-| Google Sheets "Витрати" tab | Row: Date, Category, Amount, Property, Vendor, Payment Method, Notes, Receipt Link |
-| Google Drive | Receipt photo file (if provided) |
+| PostgreSQL `transactions` | type=expense, all fields incl. description + paid_by, source=manual |
+| Google Sheets "Витрати" tab | Row: Date, Category, Amount, Description, Payment Method, Paid By, Receipt Link, Vendor, Property, Notes |
 
 ---
 
@@ -240,9 +238,9 @@ Session is cleared. Bot returns to idle, ready for the next command.
 | SUP Duration | 1 год, 2 год, 3 год, Пів дня, Весь день, Пропустити | dur_1h, dur_2h, dur_3h, dur_halfday, dur_fullday, dur_skip |
 | Account Type | Рахунок, Готівка, Nestor Account | acc_account, acc_cash, acc_nestor |
 | Dates | Пропустити дати | dates_skip |
-| Expense Category | Прибирання, Комунальні, Обслуговування, Матеріали, Маркетинг, Інше | exp_cleaning, exp_utilities, exp_maintenance, exp_materials, exp_marketing, exp_other |
-| Expense Property | Гніздечко, Чайка, Чапля, Всі, Пропустити | prop_gnizd, prop_chaika, prop_chaplia, prop_all, prop_skip |
-| Payment Method | Готівка, Рахунок | method_cash, method_account |
+| Expense Category | Laundry, Guest Amenities, Utilities, Marketing, Management Fee, Maintenance, Capital Expenses, Commissions, Cleaning and Administration, Chemicals, Other, Software, Depreciation fund, Taxes | exp_laundry, exp_guest_amenities, exp_utilities, exp_marketing, exp_mgmt_fee, exp_maintenance, exp_capex, exp_commissions, exp_cleaning_admin, exp_chemicals, exp_other, exp_software, exp_depreciation, exp_taxes |
+| Payment Method | Cash, Bank Transfer | method_cash, method_transfer |
+| Paid By | Nestor, Ihor, Ira, Other, Account | paidby_nestor, paidby_ihor, paidby_ira, paidby_other, paidby_account |
 | Receipt | Пропустити | receipt_skip |
 | Notes | Пропустити | notes_skip |
 
@@ -271,9 +269,9 @@ Visual style:
 | 2026-02-19 0:00:00 | [formula] | 2400 | Гніздечко | Instagram | Коваленко Марина | [formula] | 22.02.2026 | 25.02.2026 | Передоплата | Account | оренда котеджу | February 2026 |
 ```
 
-**"Витрати" tab** — one row per expense:
+**"Витрати" tab** — one row per expense (10 columns A-J):
 ```
-| 2026-02-19 0:00:00 | Прибирання | 850 | Гніздечко | Марія | Готівка | прибирання після гостей | https://drive.google.com/... |
+| 2026-02-19 0:00:00 | Laundry | 850 | Towel washing | Cash | Nestor | https://drive.google.com/... | | | |
 ```
 
 ---

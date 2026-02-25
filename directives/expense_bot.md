@@ -2,63 +2,88 @@
 
 ## Objective
 
-Record business expenses into PostgreSQL and Google Sheets "Витрати" tab, with optional receipt photo upload to Google Drive.
+Record business expenses into PostgreSQL and Google Sheets "Витрати" tab, with optional receipt link.
 
 ## Execution Scripts
 
-- `execution/bot/handlers/expense.py` — Full expense flow (/витрата → buttons + text → save)
+- `execution/bot/handlers/expense.py` — Full expense flow (/expense → buttons + text → save)
 - `execution/bot/services/sheets.py` — `append_expense_row()` writes to "Витрати" tab
-- `execution/bot/services/drive.py` — `upload_receipt()` uploads photo to Google Drive
 
 ## Trigger
 
-User types `/витрата` in the Telegram group.
+User types `/expense` in the Telegram group.
 
 ## Flow
 
-1. Category (inline keyboard): Прибирання, Комунальні, Обслуговування, Матеріали, Маркетинг, Інше
-2. Property (inline keyboard): Гніздечко, Чайка, Чапля, Всі, Пропустити
-3. Amount (text input)
-4. Vendor name (text input or skip)
-5. Payment method (inline keyboard): Готівка, Рахунок
-6. Receipt photo (photo upload → auto Google Drive upload, or skip)
-7. Notes (text input or skip)
-8. Save to DB + Sheets, send confirmation
+1. Category (inline keyboard): 14 options — Laundry, Guest Amenities, Utilities, Marketing, Management Fee, Maintenance, Capital Expenses, Commissions, Cleaning and Administration, Chemicals, Other, Software, Depreciation fund, Taxes
+2. Amount (text input)
+3. Description (text input)
+4. Payment method (inline keyboard): Cash, Bank Transfer
+5. Paid By (inline keyboard): Nestor, Ihor, Ira, Other, Account
+6. Receipt link (URL or skip)
+7. Save to DB + Sheets, send confirmation
 
-## Google Sheets Column Map (Витрати, A-H)
+## Fast Entry
 
-Date (YYYY-MM-DD 0:00:00) | Category | Amount | Property | Vendor | Payment Method | Notes | Receipt Link
+Format: `/expense category;amount;description;paid_by`
+Example: `/expense Laundry;850;Towel washing;Nestor`
+
+If invalid category → show error with format help and full category list.
+
+## Google Sheets Column Map (Витрати, A-J)
+
+Date (YYYY-MM-DD 0:00:00) | Category | Amount | Description | Payment Method | Paid By | Receipt Link | Vendor | Property | Notes
 
 ## State Machine
 
-`expense:awaiting_category` → `expense:awaiting_property` → `expense:awaiting_amount` → `expense:awaiting_vendor` → `expense:awaiting_payment_method` → `expense:awaiting_receipt` → `expense:awaiting_notes`
+`expense:awaiting_category` → `expense:awaiting_amount` → `expense:awaiting_description` → `expense:awaiting_payment_method` → `expense:awaiting_paid_by` → `expense:awaiting_receipt`
 
-## Receipt Upload
+## Receipt OCR Auto-Detection
 
-- Google Drive API v3 with service account credentials
-- Upload to folder specified by GOOGLE_DRIVE_FOLDER_ID
-- Filename: `receipt_YYYYMMDD_HHMMSS.jpg`
-- Permission: anyone with link can view
-- URL stored in both PostgreSQL (receipt_url) and Sheets (Receipt Link column)
-- Drive folder must be shared with the service account email
+When a non-Monobank photo is sent, OCR classifies it as a receipt. Pre-fills vendor and amount from OCR, then enters normal flow at category step. If amount is pre-filled, skips amount input and goes directly to description.
 
 ## Edge Cases
 
-- **Receipt upload fails:** Show warning, offer skip button. Transaction saved without receipt link.
-- **Large receipt photo:** Telegram max photo size is 20MB. python-telegram-bot handles compression.
 - **Amount validation:** Must be positive number. Handles spaces, commas, non-breaking spaces.
-- **Vendor skip:** Notes skip keyboard serves as vendor skip too. Empty vendor is acceptable.
+- **Receipt URL:** Must start with "http". If not, asks again or offers skip.
+- **Fast entry category mismatch:** Shows bulleted list of all valid categories.
+- **Old data backward compat:** Transactions without description/paid_by columns default to empty strings in Sheets sync.
 
 ## Category Callback Mappings
 
-| Callback | Ukrainian Label |
+| Callback | Label |
 |---|---|
-| exp_cleaning | Прибирання |
-| exp_utilities | Комунальні |
-| exp_maintenance | Обслуговування |
-| exp_materials | Матеріали |
-| exp_marketing | Маркетинг |
-| exp_other | Інше |
+| exp_laundry | Laundry |
+| exp_guest_amenities | Guest Amenities |
+| exp_utilities | Utilities |
+| exp_marketing | Marketing |
+| exp_mgmt_fee | Management Fee |
+| exp_maintenance | Maintenance |
+| exp_capex | Capital Expenses |
+| exp_commissions | Commissions |
+| exp_cleaning_admin | Cleaning and Administration |
+| exp_chemicals | Chemicals |
+| exp_other | Other |
+| exp_software | Software |
+| exp_depreciation | Depreciation fund |
+| exp_taxes | Taxes |
+
+## Payment Method Callback Mappings
+
+| Callback | Label |
+|---|---|
+| method_cash | Cash |
+| method_transfer | Bank Transfer |
+
+## Paid By Callback Mappings
+
+| Callback | Label |
+|---|---|
+| paidby_nestor | Nestor |
+| paidby_ihor | Ihor |
+| paidby_ira | Ira |
+| paidby_other | Other |
+| paidby_account | Account |
 
 ## Accessible By
 

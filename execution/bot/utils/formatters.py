@@ -16,6 +16,7 @@ from config import (
     EXPENSE_CATEGORY_MAP,
     EXPENSE_PROPERTY_MAP,
     PAYMENT_METHOD_MAP,
+    PAID_BY_MAP,
 )
 
 
@@ -116,30 +117,26 @@ def format_expense_confirmation(ctx: dict) -> str:
     """Format expense confirmation message."""
     cat_cb = ctx.get("category", "")
     category_label = _escape_md(EXPENSE_CATEGORY_MAP.get(cat_cb, cat_cb))
-    prop_cb = ctx.get("property", "")
-    property_label = _escape_md(EXPENSE_PROPERTY_MAP.get(prop_cb, PROPERTY_MAP.get(prop_cb, "—")))
     amount_str = _format_amount(ctx.get("amount"))
-    vendor = _escape_md(ctx.get("vendor", "—"))
+    description = _escape_md(ctx.get("description", "—"))
     method_cb = ctx.get("payment_method", "")
     method_label = _escape_md(PAYMENT_METHOD_MAP.get(method_cb, method_cb))
+    paidby_cb = ctx.get("paid_by", "")
+    paidby_label = _escape_md(PAID_BY_MAP.get(paidby_cb, paidby_cb))
     receipt_url = _escape_md(ctx.get("receipt_url", ""))
-    notes = _escape_md(ctx.get("notes", ""))
 
     lines = [
         "✅ *Витрату записано*",
         "",
         f"📂 Категорія: {category_label}",
-        f"🏠 Об'єкт: {property_label}",
         f"💰 Сума: {amount_str} ₴",
-        f"🏪 Виконавець: {vendor}",
+        f"📝 Опис: {description}",
         f"💳 Оплата: {method_label}",
+        f"👤 Оплатив: {paidby_label}",
     ]
 
     if receipt_url:
         lines.append(f"📎 Чек: {receipt_url}")
-
-    if notes:
-        lines.append(f"📝 Нотатка: {notes}")
 
     return "\n".join(lines)
 
@@ -217,9 +214,19 @@ def format_ask_expense_vendor() -> str:
     return "🏪 *Назва постачальника/виконавця:*"
 
 
+def format_ask_expense_description() -> str:
+    """Prompt for expense description."""
+    return "📝 *Введіть опис витрати:*"
+
+
 def format_ask_expense_payment_method() -> str:
     """Prompt for payment method."""
     return "💳 *Спосіб оплати:*"
+
+
+def format_ask_expense_paid_by() -> str:
+    """Prompt for who paid."""
+    return "👤 *Хто оплатив?*"
 
 
 def format_ask_expense_receipt() -> str:

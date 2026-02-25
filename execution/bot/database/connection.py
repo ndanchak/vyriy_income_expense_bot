@@ -8,6 +8,8 @@ Usage:
     await close_pool()
 """
 
+from pathlib import Path
+
 import asyncpg
 import logging
 
@@ -41,9 +43,13 @@ async def close_pool() -> None:
 
 
 async def run_migration(pool: asyncpg.Pool, migration_path: str) -> None:
-    """Execute a SQL migration file if tables don't exist yet."""
+    """Execute SQL migration files incrementally.
+
+    Runs 001_initial.sql if tables don't exist,
+    then 002_expense_refactor.sql if description column is missing, etc.
+    """
     async with pool.acquire() as conn:
-        # Check if transactions table exists
+        # --- 001: Initial schema ---
         exists = await conn.fetchval(
             "SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name = 'transactions')"
         )
@@ -53,4 +59,19 @@ async def run_migration(pool: asyncpg.Pool, migration_path: str) -> None:
             await conn.execute(sql)
             logger.info("Migration applied: %s", migration_path)
         else:
-            logger.info("Tables already exist, skipping migration")
+            logger.info("Tables already exist, skipping 001_initial")
+
+        # --- 002: Expense refactor (description + paid_by columns) ---
+        has_description = await conn.fetchval(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'transactions' AND column_name = 'description')"
+        )
+        if not has_description:
+            migration_002 = Path(migration_path).parent / "002_expense_refactor.sql"
+            if migration_002.exists():
+                with open(migration_002, "r") as f:
+                    sql = f.read()
+                await conn.execute(sql)
+                logger.info("Migration applied: %s", migration_002)
+            else:
+                logger.warning("Migration file not found: %s", migration_002)

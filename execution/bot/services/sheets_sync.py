@@ -22,6 +22,7 @@ from config import (
     EXPENSE_CATEGORY_MAP,
     EXPENSE_PROPERTY_MAP,
     PAYMENT_METHOD_MAP,
+    PAID_BY_MAP,
 )
 from services.sheets import append_income_row, append_expense_row
 
@@ -104,7 +105,11 @@ def _build_income_sheets_data(row) -> dict:
 
 
 def _build_expense_sheets_data(row) -> dict:
-    """Build Sheets row data from a transactions DB row (expense)."""
+    """Build Sheets row data from a transactions DB row (expense).
+
+    New 10-column layout: Date | Category | Amount | Description |
+    Payment Method | Paid By | Receipt Link | Vendor | Property | Notes
+    """
     from utils.parsers import convert_date_for_sheets
 
     date_str = row["date"].strftime("%d.%m.%Y") if row["date"] else ""
@@ -112,11 +117,13 @@ def _build_expense_sheets_data(row) -> dict:
         "date": convert_date_for_sheets(date_str),
         "category": row["category"] or "",
         "amount": float(row["amount"]) if row["amount"] else "",
-        "property": PROPERTY_MAP.get(row["property_id"], EXPENSE_PROPERTY_MAP.get(row["property_id"], row["property_id"] or "")),
-        "vendor": row["counterparty"] or "",
+        "description": row.get("description") or "",
         "payment_method": row["account_type"] or "",
-        "notes": row["notes"] or "",
+        "paid_by": row.get("paid_by") or "",
         "receipt_url": row["receipt_url"] or "",
+        "vendor": row["counterparty"] or "",
+        "property": PROPERTY_MAP.get(row["property_id"], EXPENSE_PROPERTY_MAP.get(row["property_id"], row["property_id"] or "")),
+        "notes": row["notes"] or "",
     }
 
 

@@ -134,19 +134,35 @@ def dates_skip_keyboard() -> InlineKeyboardMarkup:
 # ---------------------------------------------------------------------------
 
 def expense_category_keyboard() -> InlineKeyboardMarkup:
-    """Expense category selection."""
+    """Expense category selection (14 categories)."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🧹 Прибирання", callback_data="exp_cleaning"),
-            InlineKeyboardButton("💡 Комунальні", callback_data="exp_utilities"),
+            InlineKeyboardButton("🧺 Laundry", callback_data="exp_laundry"),
+            InlineKeyboardButton("🛁 Guest Amenities", callback_data="exp_guest_amenities"),
         ],
         [
-            InlineKeyboardButton("🔧 Обслуговування", callback_data="exp_maintenance"),
-            InlineKeyboardButton("📦 Матеріали", callback_data="exp_materials"),
+            InlineKeyboardButton("💡 Utilities", callback_data="exp_utilities"),
+            InlineKeyboardButton("📣 Marketing", callback_data="exp_marketing"),
         ],
         [
-            InlineKeyboardButton("📣 Маркетинг", callback_data="exp_marketing"),
-            InlineKeyboardButton("📋 Інше", callback_data="exp_other"),
+            InlineKeyboardButton("💼 Management Fee", callback_data="exp_mgmt_fee"),
+            InlineKeyboardButton("🔧 Maintenance", callback_data="exp_maintenance"),
+        ],
+        [
+            InlineKeyboardButton("🏗 Capital Expenses", callback_data="exp_capex"),
+            InlineKeyboardButton("💸 Commissions", callback_data="exp_commissions"),
+        ],
+        [
+            InlineKeyboardButton("🧹 Cleaning & Admin", callback_data="exp_cleaning_admin"),
+            InlineKeyboardButton("🧪 Chemicals", callback_data="exp_chemicals"),
+        ],
+        [
+            InlineKeyboardButton("💻 Software", callback_data="exp_software"),
+            InlineKeyboardButton("🏦 Depreciation fund", callback_data="exp_depreciation"),
+        ],
+        [
+            InlineKeyboardButton("📋 Taxes", callback_data="exp_taxes"),
+            InlineKeyboardButton("📋 Other", callback_data="exp_other"),
         ],
     ])
 
@@ -167,11 +183,28 @@ def expense_property_keyboard() -> InlineKeyboardMarkup:
 
 
 def payment_method_keyboard() -> InlineKeyboardMarkup:
-    """Expense payment method: cash or bank."""
+    """Expense payment method: Cash or Bank Transfer."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💵 Готівка", callback_data="method_cash"),
-            InlineKeyboardButton("🏦 Рахунок", callback_data="method_account"),
+            InlineKeyboardButton("💵 Cash", callback_data="method_cash"),
+            InlineKeyboardButton("🏦 Bank Transfer", callback_data="method_transfer"),
+        ],
+    ])
+
+
+def paid_by_keyboard() -> InlineKeyboardMarkup:
+    """Who paid for this expense."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("👤 Nestor", callback_data="paidby_nestor"),
+            InlineKeyboardButton("👤 Ihor", callback_data="paidby_ihor"),
+        ],
+        [
+            InlineKeyboardButton("👤 Ira", callback_data="paidby_ira"),
+            InlineKeyboardButton("👤 Other", callback_data="paidby_other"),
+        ],
+        [
+            InlineKeyboardButton("🏦 Account", callback_data="paidby_account"),
         ],
     ])
 

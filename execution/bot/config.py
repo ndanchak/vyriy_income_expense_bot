@@ -81,14 +81,22 @@ ACCOUNT_TYPE_MAP = {
     "acc_nestor": "Nestor Account",
 }
 
-# Expense categories
+# Expense categories (14 categories, English labels)
 EXPENSE_CATEGORY_MAP = {
-    "exp_cleaning": "Прибирання",
-    "exp_utilities": "Комунальні",
-    "exp_maintenance": "Обслуговування",
-    "exp_materials": "Матеріали",
-    "exp_marketing": "Маркетинг",
-    "exp_other": "Інше",
+    "exp_laundry": "Laundry",
+    "exp_guest_amenities": "Guest Amenities",
+    "exp_utilities": "Utilities",
+    "exp_marketing": "Marketing",
+    "exp_mgmt_fee": "Management Fee",
+    "exp_maintenance": "Maintenance",
+    "exp_capex": "Capital Expenses",
+    "exp_commissions": "Commissions",
+    "exp_cleaning_admin": "Cleaning and Administration",
+    "exp_chemicals": "Chemicals",
+    "exp_other": "Other",
+    "exp_software": "Software",
+    "exp_depreciation": "Depreciation fund",
+    "exp_taxes": "Taxes",
 }
 
 # Expense property (includes "Всі" option)
@@ -101,6 +109,15 @@ EXPENSE_PROPERTY_MAP = {
 
 # Expense payment method
 PAYMENT_METHOD_MAP = {
-    "method_cash": "Готівка",
-    "method_account": "Рахунок",
+    "method_cash": "Cash",
+    "method_transfer": "Bank Transfer",
+}
+
+# Expense: who paid
+PAID_BY_MAP = {
+    "paidby_nestor": "Nestor",
+    "paidby_ihor": "Ihor",
+    "paidby_ira": "Ira",
+    "paidby_other": "Other",
+    "paidby_account": "Account",
 }

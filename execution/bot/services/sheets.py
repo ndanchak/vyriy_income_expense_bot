@@ -117,15 +117,17 @@ def append_income_row(data: dict) -> bool:
 def append_expense_row(data: dict) -> bool:
     """Append a row to the 'Витрати' sheet tab.
 
-    Column mapping:
+    Column mapping (10 columns, A-J):
         A: Date           — YYYY-MM-DD 0:00:00
-        B: Category       — Прибирання / Комунальні / ...
+        B: Category       — Laundry / Utilities / Marketing / ...
         C: Amount         — number
-        D: Property       — Гніздечко / Чайка / Чапля / Всі / empty
-        E: Vendor         — vendor/service provider name
-        F: Payment Method — Готівка / Рахунок
-        G: Notes          — free text
-        H: Receipt Link   — Google Drive URL or empty
+        D: Description    — free text describing the expense
+        E: Payment Method — Cash / Bank Transfer
+        F: Paid By        — Nestor / Ihor / Ira / Other / Account
+        G: Receipt Link   — Google Drive URL or empty
+        H: Vendor         — vendor name (from OCR, usually empty)
+        I: Property       — Гніздечко / Чайка / Чапля / Всі / empty
+        J: Notes          — free text (not asked interactively, usually empty)
 
     Returns True on success, False on failure.
     """
@@ -138,11 +140,13 @@ def append_expense_row(data: dict) -> bool:
             data.get("date", ""),              # A: Date
             data.get("category", ""),          # B: Category
             data.get("amount", ""),            # C: Amount
-            data.get("property", ""),          # D: Property
-            data.get("vendor", ""),            # E: Vendor
-            data.get("payment_method", ""),    # F: Payment Method
-            data.get("notes", ""),             # G: Notes
-            data.get("receipt_url", ""),        # H: Receipt Link
+            data.get("description", ""),       # D: Description
+            data.get("payment_method", ""),    # E: Payment Method
+            data.get("paid_by", ""),           # F: Paid By
+            data.get("receipt_url", ""),        # G: Receipt Link
+            data.get("vendor", ""),            # H: Vendor
+            data.get("property", ""),          # I: Property
+            data.get("notes", ""),             # J: Notes
         ])
 
         worksheet.append_row(row, value_input_option="USER_ENTERED")

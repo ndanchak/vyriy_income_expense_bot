@@ -2,11 +2,9 @@
 Expense flow handler — triggered by /expense command or receipt photo detection.
 
 Three modes:
-1. Interactive: Category → Property → Amount → Vendor → Payment Method → Receipt link → Notes → Save
-2. Fast entry:  /expense category;amount;vendor → saves instantly with defaults
-3. Receipt OCR: Photo auto-detected as receipt → pre-filled Category → Property → Payment → Receipt → Notes → Save
-
-Category → Property → Amount → Vendor → Payment Method → Receipt → Notes → Save.
+1. Interactive: Category → Amount → Description → Payment Method → Paid By → Receipt → Save
+2. Fast entry:  /expense category;amount;description;paid_by → saves instantly
+3. Receipt OCR: Photo auto-detected as receipt → pre-filled → Category → Amount → Description → Payment Method → Paid By → Receipt → Save
 """
 
 import logging
@@ -16,27 +14,24 @@ import asyncpg
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import EXPENSE_CATEGORY_MAP
+from config import EXPENSE_CATEGORY_MAP, PAID_BY_MAP
 from database.models import BotSession
 from utils.state import get_session, set_session, update_context, clear_session
 from utils.keyboards import (
     expense_category_keyboard,
-    expense_property_keyboard,
     payment_method_keyboard,
+    paid_by_keyboard,
     receipt_skip_keyboard,
-    notes_skip_keyboard,
     cancel_keyboard,
 )
 from utils.formatters import (
     format_ask_expense_category,
-    format_ask_expense_property,
     format_ask_expense_amount,
-    format_ask_expense_vendor,
+    format_ask_expense_description,
     format_ask_expense_payment_method,
+    format_ask_expense_paid_by,
     format_ask_expense_receipt,
-    format_ask_expense_notes,
     format_expense_confirmation,
-    format_receipt_uploaded,
     format_receipt_ocr_summary,
 )
 from handlers.common import finalize_expense
@@ -45,14 +40,14 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Entry point: /витрата command
+# Entry point: /expense command
 # ---------------------------------------------------------------------------
 
 async def handle_vitrata_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start expense entry flow.
 
-    Supports fast entry: /expense category;amount;vendor
-    Example: /expense Прибирання;850;Оксана
+    Supports fast entry: /expense category;amount;description;paid_by
+    Example: /expense Laundry;850;Towel washing;Nestor
     """
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
@@ -66,7 +61,7 @@ async def handle_vitrata_command(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    # Check for fast entry: /expense category;amount;vendor
+    # Check for fast entry: /expense category;amount;description;paid_by
     raw_text = update.message.text or ""
     parts = raw_text.split(maxsplit=1)
     if len(parts) > 1 and ";" in parts[1]:
@@ -91,7 +86,7 @@ def _match_category(text: str) -> str | None:
     """Match user input to an expense category callback key.
 
     Case-insensitive partial match against EXPENSE_CATEGORY_MAP values.
-    Returns callback key (e.g. 'exp_cleaning') or None.
+    Returns callback key (e.g. 'exp_laundry') or None.
     """
     text_lower = text.lower().strip()
     for cb_key, label in EXPENSE_CATEGORY_MAP.items():
@@ -100,21 +95,35 @@ def _match_category(text: str) -> str | None:
     return None
 
 
+def _match_paid_by(text: str) -> str:
+    """Match user input to a paid_by callback key.
+
+    Case-insensitive partial match against PAID_BY_MAP values.
+    Returns callback key (e.g. 'paidby_nestor') or empty string.
+    """
+    text_lower = text.lower().strip()
+    for cb_key, label in PAID_BY_MAP.items():
+        if label.lower() == text_lower or label.lower().startswith(text_lower):
+            return cb_key
+    return ""
+
+
 async def _handle_fast_expense(
     update: Update, context: ContextTypes.DEFAULT_TYPE, args_text: str
 ) -> None:
-    """Parse and save expense from fast entry format: category;amount;vendor."""
+    """Parse and save expense from fast entry: category;amount;description;paid_by."""
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
 
     parts = [p.strip() for p in args_text.split(";")]
 
+    # Must have at least category and amount
     if len(parts) < 2:
         categories = ", ".join(EXPENSE_CATEGORY_MAP.values())
         await update.message.reply_text(
             "⚠️ Невірний формат. Використовуйте:\n"
-            "`/expense категорія;сума;виконавець`\n\n"
-            f"Категорії: {categories}",
+            "`/expense category;amount;description;paid by`\n\n"
+            f"*Категорії:* {categories}",
             parse_mode="Markdown",
         )
         return
@@ -122,10 +131,12 @@ async def _handle_fast_expense(
     # Parse category
     cat_key = _match_category(parts[0])
     if not cat_key:
-        categories = ", ".join(EXPENSE_CATEGORY_MAP.values())
+        categories = "\n".join(f"• {v}" for v in EXPENSE_CATEGORY_MAP.values())
         await update.message.reply_text(
             f"⚠️ Невідома категорія: *{parts[0]}*\n\n"
-            f"Доступні: {categories}",
+            "Використовуйте:\n"
+            "`/expense category;amount;description;paid by`\n\n"
+            f"*Доступні категорії:*\n{categories}",
             parse_mode="Markdown",
         )
         return
@@ -144,18 +155,22 @@ async def _handle_fast_expense(
         )
         return
 
-    # Parse vendor (optional third part)
-    vendor = parts[2] if len(parts) > 2 else ""
+    # Parse description (optional third part)
+    description = parts[2] if len(parts) > 2 else ""
+
+    # Parse paid_by (optional fourth part)
+    paid_by_key = ""
+    if len(parts) > 3:
+        paid_by_key = _match_paid_by(parts[3])
 
     # Build context with defaults
     ctx = {
         "category": cat_key,
-        "property": "prop_all",       # default: Всі
         "amount": str(amount),
-        "vendor": vendor,
-        "payment_method": "",          # empty
+        "description": description,
+        "payment_method": "",
+        "paid_by": paid_by_key,
         "receipt_url": "",
-        "notes": "",
     }
 
     # Save directly
@@ -189,8 +204,9 @@ async def handle_receipt_expense(
         "vendor": parsed_receipt.get("vendor", ""),
         "amount": str(parsed_receipt["amount"]) if parsed_receipt.get("amount") else "",
         "date": parsed_receipt.get("date", ""),
+        "description": "",
         "receipt_url": "",
-        "notes": "",
+        "paid_by": "",
         "source": "receipt_ocr",
     }
 
@@ -226,31 +242,11 @@ async def handle_expense_callback(
     # --- Category ---
     if state == "expense:awaiting_category":
         ctx["category"] = data
-        await update_context(pool, chat_id, "expense:awaiting_property", ctx)
-        await query.edit_message_text(
-            format_ask_expense_property(),
-            reply_markup=expense_property_keyboard(),
-            parse_mode="Markdown",
-        )
-
-    # --- Property ---
-    elif state == "expense:awaiting_property":
-        ctx["property"] = data
-
-        # If amount + vendor are pre-filled (receipt OCR), skip to payment method
-        if ctx.get("amount") and ctx.get("vendor"):
-            await update_context(pool, chat_id, "expense:awaiting_payment_method", ctx)
+        # If amount is pre-filled (receipt OCR), skip to description
+        if ctx.get("amount"):
+            await update_context(pool, chat_id, "expense:awaiting_description", ctx)
             await query.edit_message_text(
-                format_ask_expense_payment_method(),
-                reply_markup=payment_method_keyboard(),
-                parse_mode="Markdown",
-            )
-        elif ctx.get("amount"):
-            # Amount pre-filled but no vendor — ask for vendor
-            await update_context(pool, chat_id, "expense:awaiting_vendor", ctx)
-            await query.edit_message_text(
-                format_ask_expense_vendor(),
-                reply_markup=notes_skip_keyboard(),
+                format_ask_expense_description(),
                 parse_mode="Markdown",
             )
         else:
@@ -260,20 +256,19 @@ async def handle_expense_callback(
                 parse_mode="Markdown",
             )
 
-    # --- Vendor skip (reuses notes_skip button) ---
-    elif state == "expense:awaiting_vendor":
-        if data == "notes_skip":
-            ctx["vendor"] = ""
-            await update_context(pool, chat_id, "expense:awaiting_payment_method", ctx)
-            await query.edit_message_text(
-                format_ask_expense_payment_method(),
-                reply_markup=payment_method_keyboard(),
-                parse_mode="Markdown",
-            )
-
     # --- Payment Method ---
     elif state == "expense:awaiting_payment_method":
         ctx["payment_method"] = data
+        await update_context(pool, chat_id, "expense:awaiting_paid_by", ctx)
+        await query.edit_message_text(
+            format_ask_expense_paid_by(),
+            reply_markup=paid_by_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    # --- Paid By ---
+    elif state == "expense:awaiting_paid_by":
+        ctx["paid_by"] = data
         await update_context(pool, chat_id, "expense:awaiting_receipt", ctx)
         await query.edit_message_text(
             format_ask_expense_receipt(),
@@ -284,16 +279,6 @@ async def handle_expense_callback(
     # --- Receipt skip ---
     elif state == "expense:awaiting_receipt":
         if data == "receipt_skip":
-            await update_context(pool, chat_id, "expense:awaiting_notes", ctx)
-            await query.edit_message_text(
-                format_ask_expense_notes(),
-                reply_markup=notes_skip_keyboard(),
-                parse_mode="Markdown",
-            )
-
-    # --- Notes skip ---
-    elif state == "expense:awaiting_notes":
-        if data == "notes_skip":
             # Finalize
             tx_id = await finalize_expense(pool, chat_id, ctx)
             if tx_id:
@@ -305,7 +290,7 @@ async def handle_expense_callback(
 
 
 # ---------------------------------------------------------------------------
-# Text handler: amount, vendor, notes
+# Text handler: amount, description, receipt URL
 # ---------------------------------------------------------------------------
 
 async def handle_expense_text(
@@ -334,15 +319,14 @@ async def handle_expense_text(
             return
 
         ctx["amount"] = str(amount)
-        await update_context(pool, chat_id, "expense:awaiting_vendor", ctx)
+        await update_context(pool, chat_id, "expense:awaiting_description", ctx)
         await update.message.reply_text(
-            format_ask_expense_vendor(),
-            reply_markup=notes_skip_keyboard(),  # reuse skip button
+            format_ask_expense_description(),
             parse_mode="Markdown",
         )
 
-    elif state == "expense:awaiting_vendor":
-        ctx["vendor"] = text
+    elif state == "expense:awaiting_description":
+        ctx["description"] = text
         await update_context(pool, chat_id, "expense:awaiting_payment_method", ctx)
         await update.message.reply_text(
             format_ask_expense_payment_method(),
@@ -354,28 +338,22 @@ async def handle_expense_text(
         # Accept a Drive link as the receipt URL
         if text.startswith("http"):
             ctx["receipt_url"] = text
-            await update_context(pool, chat_id, "expense:awaiting_notes", ctx)
-            await update.message.reply_text(
-                f"📎 Посилання збережено!\n\n{format_ask_expense_notes()}",
-                reply_markup=notes_skip_keyboard(),
-                parse_mode="Markdown",
-            )
+            # Finalize
+            tx_id = await finalize_expense(pool, chat_id, ctx)
+            if tx_id:
+                confirmation = format_expense_confirmation(ctx)
+                await update.message.reply_text(
+                    f"📎 Посилання збережено!\n\n{confirmation}",
+                    parse_mode="Markdown",
+                )
+            else:
+                await update.message.reply_text("❌ Помилка збереження. Спробуйте ще раз.")
+            await clear_session(pool, chat_id)
         else:
             await update.message.reply_text(
                 "⚠️ Надішліть посилання (починається з http) або натисніть Пропустити.",
                 reply_markup=receipt_skip_keyboard(),
             )
-
-    elif state == "expense:awaiting_notes":
-        ctx["notes"] = text
-        # Finalize
-        tx_id = await finalize_expense(pool, chat_id, ctx)
-        if tx_id:
-            confirmation = format_expense_confirmation(ctx)
-            await update.message.reply_text(confirmation, parse_mode="Markdown")
-        else:
-            await update.message.reply_text("❌ Помилка збереження. Спробуйте ще раз.")
-        await clear_session(pool, chat_id)
 
 
 # ---------------------------------------------------------------------------

@@ -211,6 +211,27 @@ Monobank payment screenshot in Telegram group → Google Vision OCR → interact
 | `plat_return` | Return |
 | `acc_nestor` | Nestor Account |
 | `dur_1h` / `dur_2h` / `dur_3h` / `dur_halfday` / `dur_fullday` | Duration labels |
+| `exp_laundry` | Laundry |
+| `exp_guest_amenities` | Guest Amenities |
+| `exp_utilities` | Utilities |
+| `exp_marketing` | Marketing |
+| `exp_mgmt_fee` | Management Fee |
+| `exp_maintenance` | Maintenance |
+| `exp_capex` | Capital Expenses |
+| `exp_commissions` | Commissions |
+| `exp_cleaning_admin` | Cleaning and Administration |
+| `exp_chemicals` | Chemicals |
+| `exp_other` | Other |
+| `exp_software` | Software |
+| `exp_depreciation` | Depreciation fund |
+| `exp_taxes` | Taxes |
+| `method_cash` | Cash |
+| `method_transfer` | Bank Transfer |
+| `paidby_nestor` | Nestor |
+| `paidby_ihor` | Ihor |
+| `paidby_ira` | Ira |
+| `paidby_other` | Other |
+| `paidby_account` | Account |
 
 ## Setup Requirements (for fresh import)
 

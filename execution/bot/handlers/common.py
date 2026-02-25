@@ -28,6 +28,7 @@ from config import (
     EXPENSE_CATEGORY_MAP,
     EXPENSE_PROPERTY_MAP,
     PAYMENT_METHOD_MAP,
+    PAID_BY_MAP,
 )
 from utils.state import get_session, clear_session
 from utils.formatters import format_cancel_message
@@ -339,11 +340,11 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
     cat_cb = ctx.get("category", "")
     category_label = EXPENSE_CATEGORY_MAP.get(cat_cb, cat_cb)
 
-    prop_cb = ctx.get("property", "")
-    property_label = EXPENSE_PROPERTY_MAP.get(prop_cb, PROPERTY_MAP.get(prop_cb, ""))
-
     method_cb = ctx.get("payment_method", "")
     method_label = PAYMENT_METHOD_MAP.get(method_cb, method_cb)
+
+    paidby_cb = ctx.get("paid_by", "")
+    paidby_label = PAID_BY_MAP.get(paidby_cb, paidby_cb)
 
     amount_raw = ctx.get("amount", "0")
     try:
@@ -351,10 +352,15 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
     except Exception:
         amount = Decimal("0")
 
-    vendor = ctx.get("vendor", "")
-    notes = ctx.get("notes", "")
+    description = ctx.get("description", "")
+    vendor = ctx.get("vendor", "")         # from receipt OCR, empty otherwise
+    notes = ctx.get("notes", "")           # not asked interactively anymore
     receipt_url = ctx.get("receipt_url", "")
     tx_date = datetime.now().date()
+
+    # Property is not asked in new flow; keep for receipt OCR backward compat
+    prop_cb = ctx.get("property", "")
+    property_label = EXPENSE_PROPERTY_MAP.get(prop_cb, PROPERTY_MAP.get(prop_cb, ""))
 
     # --- PostgreSQL INSERT ---
     try:
@@ -363,9 +369,9 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
                 """
                 INSERT INTO transactions
                     (type, date, amount, property_id, counterparty, account_type,
-                     category, notes, receipt_url, source, sheets_synced)
+                     category, description, paid_by, notes, receipt_url, source, sheets_synced)
                 VALUES
-                    ('expense', $1, $2, $3, $4, $5, $6, $7, $8, 'manual', FALSE)
+                    ('expense', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'manual', FALSE)
                 RETURNING id
                 """,
                 tx_date,
@@ -374,6 +380,8 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
                 vendor or None,
                 method_label or None,
                 category_label or None,
+                description or None,
+                paidby_label or None,
                 notes or None,
                 receipt_url or None,
             )
@@ -387,11 +395,13 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
         "date": tx_date.strftime("%Y-%m-%d") + " 0:00:00",
         "category": category_label,
         "amount": float(amount),
-        "property": property_label,
-        "vendor": vendor,
+        "description": description,
         "payment_method": method_label,
-        "notes": notes,
+        "paid_by": paidby_label,
         "receipt_url": receipt_url,
+        "vendor": vendor,
+        "property": property_label,
+        "notes": notes,
     }
 
     try:

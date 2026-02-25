@@ -21,7 +21,9 @@ class Transaction:
     counterparty: Optional[str] = None     # sender name or vendor
     payment_type: Optional[str] = None     # Передоплата | Доплата | Оплата | Сапи
     account_type: Optional[str] = None     # Account | Cash | Nestor Account
-    category: Optional[str] = None         # expense only
+    category: Optional[str] = None         # expense only: Laundry | Utilities | ...
+    description: Optional[str] = None      # expense only: free-text expense description
+    paid_by: Optional[str] = None          # expense only: Nestor | Ihor | Ira | Other | Account
     checkin_date: Optional[date] = None
     checkout_date: Optional[date] = None
     sup_duration: Optional[str] = None
