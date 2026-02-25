@@ -17,10 +17,10 @@ class Transaction:
     date: date
     amount: Decimal
     property_id: Optional[str] = None      # gnizd | chaika | chaplia | sup
-    platform: Optional[str] = None         # INST | BC | Airbnb | HutsHub | Direct
+    platform: Optional[str] = None         # Website | Instagram | Booking | HutsHub | AirBnB | Phone | Return
     counterparty: Optional[str] = None     # sender name or vendor
     payment_type: Optional[str] = None     # Передоплата | Доплата | Оплата | Сапи
-    account_type: Optional[str] = None     # Account | Cash
+    account_type: Optional[str] = None     # Account | Cash | Nestor Account
     category: Optional[str] = None         # expense only
     checkin_date: Optional[date] = None
     checkout_date: Optional[date] = None

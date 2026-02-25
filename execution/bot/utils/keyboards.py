@@ -13,18 +13,46 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 # ---------------------------------------------------------------------------
 
 def property_keyboard() -> InlineKeyboardMarkup:
-    """Property selection — Make.com module 7."""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🏠 Гніздечко", callback_data="prop_gnizd"),
-            InlineKeyboardButton("🐦 Чайка", callback_data="prop_chaika"),
-        ],
-        [
-            InlineKeyboardButton("🦢 Чапля", callback_data="prop_chaplia"),
-            InlineKeyboardButton("🏄 SUP Rental", callback_data="prop_sup"),
-        ],
-        [InlineKeyboardButton("⏭ Пропустити", callback_data="prop_skip")],
-    ])
+    """Property selection — Make.com module 7 (legacy single-select)."""
+    return property_toggle_keyboard([])
+
+
+# Property button definitions: (callback_data, default_emoji, label)
+_PROPERTY_BUTTONS = [
+    ("prop_gnizd", "🏠", "Гніздечко"),
+    ("prop_chaika", "🐦", "Чайка"),
+    ("prop_chaplia", "🦢", "Чапля"),
+    ("prop_sup", "🏄", "SUP Rental"),
+]
+
+
+def property_toggle_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
+    """Multi-select property keyboard with toggle checkmarks.
+
+    Tapping a property toggles ✅ on/off. When any property is selected,
+    a "Підтвердити" button appears. SUP is exclusive (handled by the callback).
+    """
+    rows = []
+    for i in range(0, len(_PROPERTY_BUTTONS), 2):
+        row = []
+        for cb, emoji, label in _PROPERTY_BUTTONS[i:i + 2]:
+            if cb in selected:
+                row.append(InlineKeyboardButton(f"✅ {label}", callback_data=cb))
+            else:
+                row.append(InlineKeyboardButton(f"{emoji} {label}", callback_data=cb))
+        rows.append(row)
+
+    # Confirm button (only if something is selected)
+    if selected:
+        count = len(selected)
+        rows.append([InlineKeyboardButton(
+            f"✅ Підтвердити ({count})", callback_data="prop_confirm"
+        )])
+
+    # Skip button always available
+    rows.append([InlineKeyboardButton("⏭ Пропустити", callback_data="prop_skip")])
+
+    return InlineKeyboardMarkup(rows)
 
 
 def sup_duration_keyboard() -> InlineKeyboardMarkup:
@@ -63,26 +91,33 @@ def platform_keyboard() -> InlineKeyboardMarkup:
     """Booking platform — Make.com module 19."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📸 INST", callback_data="plat_inst"),
-            InlineKeyboardButton("🏨 BC", callback_data="plat_bc"),
+            InlineKeyboardButton("🌐 Website", callback_data="plat_website"),
+            InlineKeyboardButton("📸 Instagram", callback_data="plat_instagram"),
         ],
         [
-            InlineKeyboardButton("✈️ Airbnb", callback_data="plat_airbnb"),
+            InlineKeyboardButton("🏨 Booking", callback_data="plat_booking"),
             InlineKeyboardButton("🔗 HutsHub", callback_data="plat_hutshub"),
         ],
         [
-            InlineKeyboardButton("📞 Direct", callback_data="plat_direct"),
+            InlineKeyboardButton("✈️ AirBnB", callback_data="plat_airbnb"),
+            InlineKeyboardButton("📞 Phone", callback_data="plat_phone"),
+        ],
+        [
+            InlineKeyboardButton("↩️ Return", callback_data="plat_return"),
             InlineKeyboardButton("⏭ Пропустити", callback_data="plat_skip"),
         ],
     ])
 
 
 def account_type_keyboard() -> InlineKeyboardMarkup:
-    """Account type: bank transfer or cash."""
+    """Account type: bank transfer, cash, or Nestor's personal account."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🏦 Рахунок", callback_data="acc_account"),
             InlineKeyboardButton("💵 Готівка", callback_data="acc_cash"),
+        ],
+        [
+            InlineKeyboardButton("👤 Nestor Account", callback_data="acc_nestor"),
         ],
     ])
 

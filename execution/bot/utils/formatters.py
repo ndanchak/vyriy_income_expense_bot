@@ -25,13 +25,16 @@ def format_ocr_summary(parsed: dict) -> str:
     Shows extracted payment data and asks for property selection.
     """
     amount_str = _format_amount(parsed.get("amount"))
+    sender = _escape_md(parsed.get("sender_name", "—"))
+    date = _escape_md(parsed.get("date", "—"))
+    purpose = _escape_md(parsed.get("purpose", "—"))
     return (
         "💳 *Отримано платіж*\n"
         "\n"
-        f"👤 Від: {parsed.get('sender_name', '—')}\n"
+        f"👤 Від: {sender}\n"
         f"💰 Сума: {amount_str} ₴\n"
-        f"📅 Дата: {parsed.get('date', '—')}\n"
-        f"📝 Призначення: {parsed.get('purpose', '—')}\n"
+        f"📅 Дата: {date}\n"
+        f"📝 Призначення: {purpose}\n"
         "\n"
         "🏠 *До якого об'єкту відноситься?*"
     )
@@ -41,18 +44,24 @@ def format_income_confirmation(ctx: dict) -> str:
     """Format income confirmation — Make.com module 31.
 
     Different format for SUP vs property bookings.
+    All dynamic content is escaped to prevent Markdown parsing errors.
     """
-    property_cb = ctx.get("property", "")
-    is_sup = property_cb == "prop_sup"
+    # Support multi-select properties and legacy single property
+    properties = ctx.get("properties", [])
+    if not properties:
+        single = ctx.get("property", "")
+        properties = [single] if single and single != "prop_skip" else []
+    is_sup = properties == ["prop_sup"]
 
-    property_label = PROPERTY_MAP.get(property_cb, ctx.get("property_label", "—"))
+    prop_labels = [PROPERTY_MAP.get(p, p) for p in properties if p]
+    property_label = _escape_md(" + ".join(prop_labels)) if prop_labels else "—"
     amount_str = _format_amount(ctx.get("amount") or ctx.get("ocr_amount"))
-    sender = ctx.get("guest_name") or ctx.get("ocr_sender", "—")
-    date_str = ctx.get("date") or ctx.get("ocr_date", "—")
+    sender = _escape_md(ctx.get("guest_name") or ctx.get("ocr_sender", "—"))
+    date_str = _escape_md(ctx.get("date") or ctx.get("ocr_date", "—"))
 
     if is_sup:
         dur_cb = ctx.get("sup_duration", "")
-        duration_label = SUP_DURATION_MAP.get(dur_cb, dur_cb)
+        duration_label = _escape_md(SUP_DURATION_MAP.get(dur_cb, dur_cb))
         return (
             "✅ *SUP Rental записано*\n"
             "\n"
@@ -66,12 +75,12 @@ def format_income_confirmation(ctx: dict) -> str:
 
     # Property booking confirmation
     pay_cb = ctx.get("payment_type", "")
-    payment_label = PAYMENT_TYPE_MAP.get(pay_cb, pay_cb)
+    payment_label = _escape_md(PAYMENT_TYPE_MAP.get(pay_cb, pay_cb))
     plat_cb = ctx.get("platform", "")
-    platform_label = PLATFORM_MAP.get(plat_cb, plat_cb)
+    platform_label = _escape_md(PLATFORM_MAP.get(plat_cb, plat_cb))
     acc_cb = ctx.get("account_type", "")
-    account_label = ACCOUNT_TYPE_MAP.get(acc_cb, acc_cb)
-    month = ctx.get("month", "")
+    account_label = _escape_md(ACCOUNT_TYPE_MAP.get(acc_cb, acc_cb))
+    month = _escape_md(ctx.get("month", ""))
 
     lines = [
         "✅ *Записано в Google Sheets*",
@@ -84,8 +93,8 @@ def format_income_confirmation(ctx: dict) -> str:
         f"🏦 Рахунок: {account_label}",
     ]
 
-    checkin = ctx.get("checkin")
-    checkout = ctx.get("checkout")
+    checkin = _escape_md(ctx.get("checkin"))
+    checkout = _escape_md(ctx.get("checkout"))
     if checkin:
         lines.append(f"📅 Чек-ін: {checkin}")
     if checkout:
@@ -106,15 +115,15 @@ def format_income_confirmation(ctx: dict) -> str:
 def format_expense_confirmation(ctx: dict) -> str:
     """Format expense confirmation message."""
     cat_cb = ctx.get("category", "")
-    category_label = EXPENSE_CATEGORY_MAP.get(cat_cb, cat_cb)
+    category_label = _escape_md(EXPENSE_CATEGORY_MAP.get(cat_cb, cat_cb))
     prop_cb = ctx.get("property", "")
-    property_label = EXPENSE_PROPERTY_MAP.get(prop_cb, PROPERTY_MAP.get(prop_cb, "—"))
+    property_label = _escape_md(EXPENSE_PROPERTY_MAP.get(prop_cb, PROPERTY_MAP.get(prop_cb, "—")))
     amount_str = _format_amount(ctx.get("amount"))
-    vendor = ctx.get("vendor", "—")
+    vendor = _escape_md(ctx.get("vendor", "—"))
     method_cb = ctx.get("payment_method", "")
-    method_label = PAYMENT_METHOD_MAP.get(method_cb, method_cb)
-    receipt_url = ctx.get("receipt_url", "")
-    notes = ctx.get("notes", "")
+    method_label = _escape_md(PAYMENT_METHOD_MAP.get(method_cb, method_cb))
+    receipt_url = _escape_md(ctx.get("receipt_url", ""))
+    notes = _escape_md(ctx.get("notes", ""))
 
     lines = [
         "✅ *Витрату записано*",
@@ -214,8 +223,13 @@ def format_ask_expense_payment_method() -> str:
 
 
 def format_ask_expense_receipt() -> str:
-    """Prompt for receipt photo."""
-    return "📎 *Надішліть фото чеку для завантаження, або пропустіть:*"
+    """Prompt for receipt link (manual upload to Drive)."""
+    return (
+        "📎 *Чек (необов'язково):*\n"
+        "\n"
+        "Завантажте фото чеку на Google Drive та надішліть посилання.\n"
+        "Або натисніть Пропустити."
+    )
 
 
 def format_ask_expense_notes() -> str:
@@ -228,9 +242,47 @@ def format_receipt_uploaded() -> str:
     return "📎 Чек завантажено!"
 
 
+def format_receipt_ocr_summary(parsed: dict) -> str:
+    """Format receipt OCR result — shows parsed data and asks for category.
+
+    Used when a non-Monobank photo is auto-detected as an expense receipt.
+    """
+    vendor = _escape_md(parsed.get("vendor", "—"))
+    amount_str = _format_amount(parsed.get("amount"))
+    date_str = _escape_md(parsed.get("date", ""))
+
+    lines = [
+        "🧾 *Розпізнано чек*",
+        "",
+        f"🏪 Магазин: {vendor}",
+        f"💰 Сума: {amount_str} ₴",
+    ]
+
+    if date_str:
+        lines.append(f"📅 Дата: {date_str}")
+
+    lines.append("")
+    lines.append("📂 *Оберіть категорію:*")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _escape_md(text: str) -> str:
+    """Escape Telegram Markdown special characters in dynamic content.
+
+    Prevents OCR text or user input from breaking parse_mode='Markdown'.
+    Telegram legacy Markdown treats * _ ` [ as formatting characters.
+    """
+    if not text:
+        return text
+    for char in ("*", "_", "`", "["):
+        text = text.replace(char, "\\" + char)
+    return text
+
 
 def _format_amount(amount) -> str:
     """Format amount for display: 2400 → '2 400,00'."""
@@ -250,8 +302,13 @@ def _format_amount(amount) -> str:
 def _get_skip_warnings(ctx: dict) -> list[str]:
     """Generate warning messages for skipped fields."""
     warnings = []
+
+    # Property: check new multi-select format (empty list = skipped)
+    properties = ctx.get("properties", [])
+    if not properties and ctx.get("property", "") in ("prop_skip", ""):
+        warnings.append("⚠️ Об'єкт: не вказано — оновіть вручну")
+
     skip_checks = [
-        ("property", "prop_skip", "Об'єкт"),
         ("payment_type", "pay_skip", "Тип платежу"),
         ("platform", "plat_skip", "Платформа"),
         ("sup_duration", "dur_skip", "Тривалість SUP"),

@@ -23,7 +23,7 @@ Record income payments into PostgreSQL and Google Sheets "Доході" tab. Two
 
 ## Google Sheets Column Map (Доході, A-M)
 
-Date (YYYY-MM-DD 0:00:00) | Day# (empty/formula) | Amount | Property | Platform | Guest Name | Nights (empty/formula) | Check-in (DD.MM.YYYY) | Check-out (DD.MM.YYYY) | Payment Type | Account Type | Notes | Month
+Date (YYYY-MM-DD 0:00:00) | Day# (empty/formula) | Amount | Property | Platform (Website/Instagram/Booking/HutsHub/AirBnB/Phone/Return) | Guest Name | Nights (empty/formula) | Check-in (DD.MM.YYYY) | Check-out (DD.MM.YYYY) | Payment Type | Account Type (Account/Cash/Nestor Account) | Notes | Month
 
 ## State Machine
 

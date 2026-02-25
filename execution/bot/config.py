@@ -56,11 +56,13 @@ PAYMENT_TYPE_MAP = {
 
 # Platform (Make.com module 24 switch)
 PLATFORM_MAP = {
-    "plat_inst": "INST",
-    "plat_bc": "BC",
-    "plat_airbnb": "Airbnb",
+    "plat_website": "Website",
+    "plat_instagram": "Instagram",
+    "plat_booking": "Booking",
     "plat_hutshub": "HutsHub",
-    "plat_direct": "Direct",
+    "plat_airbnb": "AirBnB",
+    "plat_phone": "Phone",
+    "plat_return": "Return",
 }
 
 # SUP duration (Make.com module 25 switch)
@@ -76,6 +78,7 @@ SUP_DURATION_MAP = {
 ACCOUNT_TYPE_MAP = {
     "acc_account": "Account",
     "acc_cash": "Cash",
+    "acc_nestor": "Nestor Account",
 }
 
 # Expense categories

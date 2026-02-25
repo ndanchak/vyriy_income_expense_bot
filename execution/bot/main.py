@@ -69,13 +69,10 @@ async def lifespan(app: FastAPI):
     bot_app.bot_data["db_pool"] = pool
 
     # 3. Register handlers (order matters — more specific first)
-    # Commands
-    bot_app.add_handler(CommandHandler("дохід", handle_dohid_command))
-    bot_app.add_handler(CommandHandler("dohid", handle_dohid_command))  # Latin alias
-    bot_app.add_handler(CommandHandler("витрата", handle_vitrata_command))
-    bot_app.add_handler(CommandHandler("vytrata", handle_vitrata_command))  # Latin alias
-    bot_app.add_handler(CommandHandler("скасувати", handle_cancel))
-    bot_app.add_handler(CommandHandler("cancel", handle_cancel))  # Latin alias
+    # Commands (Telegram only allows Latin letters, digits, underscores)
+    bot_app.add_handler(CommandHandler("income", handle_dohid_command))
+    bot_app.add_handler(CommandHandler("expense", handle_vitrata_command))
+    bot_app.add_handler(CommandHandler("cancel", handle_cancel))
     bot_app.add_handler(CommandHandler("start", handle_start))
     bot_app.add_handler(CommandHandler("help", handle_help))
 
@@ -92,7 +89,7 @@ async def lifespan(app: FastAPI):
     await bot_app.initialize()
     await bot_app.start()
 
-    # 5. Set webhook
+    # 5. Set webhook (production) or polling (local dev)
     if WEBHOOK_URL:
         webhook_url = f"{WEBHOOK_URL}/webhook"
         await bot_app.bot.set_webhook(
@@ -101,7 +98,10 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Webhook set: %s", webhook_url)
     else:
-        logger.warning("WEBHOOK_URL not set — bot will not receive updates")
+        # Local dev: delete any old webhook and start polling
+        await bot_app.bot.delete_webhook(drop_pending_updates=True)
+        await bot_app.updater.start_polling(drop_pending_updates=True)
+        logger.info("No WEBHOOK_URL — running in polling mode (local dev)")
 
     # 6. Start Sheets sync scheduler
     setup_sync_scheduler(pool)
@@ -112,6 +112,8 @@ async def lifespan(app: FastAPI):
 
     # --- SHUTDOWN ---
     if bot_app:
+        if bot_app.updater and bot_app.updater.running:
+            await bot_app.updater.stop()
         await bot_app.stop()
         await bot_app.shutdown()
     await close_pool()
@@ -176,9 +178,9 @@ async def handle_start(update: Update, context) -> None:
         "\n"
         "Доступні команди:\n"
         "📸 Надішліть скріншот Monobank — автоматичний запис доходу\n"
-        "💰 /дохід — ручне введення доходу\n"
-        "💸 /витрата — запис витрати\n"
-        "❌ /скасувати — скасувати поточну операцію\n"
+        "💰 /income — ручне введення доходу\n"
+        "💸 /expense — запис витрати\n"
+        "❌ /cancel — скасувати поточну операцію\n"
         "❓ /help — довідка",
         parse_mode="Markdown",
     )
@@ -194,14 +196,14 @@ async def handle_help(update: Update, context) -> None:
         "відправника, дату → запитає об'єкт, тип оплати, платформу, дати.\n"
         "\n"
         "*Запис доходу (вручну):*\n"
-        "/дохід → бот запитає суму, ім'я гостя, об'єкт, тип оплати, платформу, дати.\n"
+        "/income → бот запитає суму, ім'я гостя, об'єкт, тип оплати, платформу, дати.\n"
         "\n"
         "*Запис витрати:*\n"
-        "/витрата → категорія, об'єкт, сума, виконавець, спосіб оплати, "
+        "/expense → категорія, об'єкт, сума, виконавець, спосіб оплати, "
         "фото чеку (необов'язково), нотатка.\n"
         "\n"
         "*Скасування:*\n"
-        "/скасувати — на будь-якому кроці скасує поточну операцію.\n"
+        "/cancel — на будь-якому кроці скасує поточну операцію.\n"
         "\n"
         "Дані зберігаються в базу даних та дублюються в Google Sheets.",
         parse_mode="Markdown",

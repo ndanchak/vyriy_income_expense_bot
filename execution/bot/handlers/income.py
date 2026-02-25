@@ -12,7 +12,6 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import (
-    GOOGLE_VISION_API_KEY,
     PROPERTY_MAP,
     PAYMENT_TYPE_MAP,
     PLATFORM_MAP,
@@ -24,6 +23,7 @@ from utils.state import get_session, set_session, update_context, clear_session
 from utils.parsers import parse_monobank_ocr, parse_dates_input
 from utils.keyboards import (
     property_keyboard,
+    property_toggle_keyboard,
     sup_duration_keyboard,
     payment_type_keyboard,
     platform_keyboard,
@@ -40,53 +40,34 @@ from utils.formatters import (
     format_ask_sup_duration,
     format_ask_property,
 )
-from services.ocr import extract_text_from_image
 from handlers.common import finalize_income
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Entry point: photo received
+# Entry point: OCR text already extracted by photo router
 # ---------------------------------------------------------------------------
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle photo message — start income OCR flow.
+async def handle_photo_with_ocr(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, ocr_text: str
+) -> None:
+    """Handle Monobank screenshot — parse OCR text and start income flow.
 
-    Equivalent to Make.com modules 1-7:
-    trigger → filter → download → OCR → parse → show summary → ask property.
+    Called by handle_photo_router() in common.py after download + OCR + classification.
+    Session existence is already checked by the router.
+
+    Equivalent to Make.com modules 6b-7: parse → show summary → ask property.
     """
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # Check if user already has an active session
-    existing = await get_session(pool, chat_id)
-    if existing:
-        await update.message.reply_text(
-            "⚠️ У вас вже є активна операція. Завершіть її або натисніть /скасувати"
-        )
-        return
-
-    # 1. Download photo (Make.com modules 3-4)
-    photo = update.message.photo[-1]  # highest resolution
-    file = await photo.get_file()
-    image_bytes = await file.download_as_bytearray()
-
-    # 2. OCR (Make.com module 5)
-    ocr_text = await extract_text_from_image(bytes(image_bytes), GOOGLE_VISION_API_KEY)
-
-    if not ocr_text:
-        await update.message.reply_text(
-            "⚠️ Не вдалося розпізнати текст на зображенні. "
-            "Спробуйте ще раз або використайте /дохід для ручного введення."
-        )
-        return
-
-    # 3. Parse (Make.com module 6b)
+    # Parse Monobank OCR text
     parsed = parse_monobank_ocr(ocr_text)
+    logger.info("Parsed Monobank OCR: %s", parsed)
 
-    # 4. Save session
+    # Save session
     session_ctx = {
         "ocr_sender": parsed["sender_name"],
         "ocr_amount": str(parsed["amount"]) if parsed["amount"] else "",
@@ -96,7 +77,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     }
     await set_session(pool, chat_id, user_id, "income:awaiting_property", session_ctx)
 
-    # 5. Send summary + property keyboard (Make.com module 7)
+    # Send summary + property keyboard (Make.com module 7)
     await update.message.reply_text(
         format_ocr_summary(parsed),
         reply_markup=property_keyboard(),
@@ -126,22 +107,34 @@ async def handle_income_callback(
     data = query.data
     ctx = dict(session.context)
 
-    # --- Property selection ---
+    # --- Property selection (multi-select toggle) ---
     if state in ("income:awaiting_property", "income_manual:awaiting_property"):
-        ctx["property"] = data
+        selected = ctx.get("properties", [])
 
-        if data == "prop_sup":
-            # SUP branch: ask duration (Make.com module 11)
-            next_state = state.replace("awaiting_property", "awaiting_sup_duration")
-            await update_context(pool, chat_id, next_state, ctx)
-            await query.edit_message_text(
-                format_ask_sup_duration(),
-                reply_markup=sup_duration_keyboard(),
-                parse_mode="Markdown",
-            )
+        if data == "prop_confirm":
+            # User confirmed selection → proceed to next step
+            if "prop_sup" in selected:
+                # SUP branch: ask duration (Make.com module 11)
+                next_state = state.replace("awaiting_property", "awaiting_sup_duration")
+                await update_context(pool, chat_id, next_state, ctx)
+                await query.edit_message_text(
+                    format_ask_sup_duration(),
+                    reply_markup=sup_duration_keyboard(),
+                    parse_mode="Markdown",
+                )
+            else:
+                # Normal property: ask payment type
+                next_state = state.replace("awaiting_property", "awaiting_payment_type")
+                await update_context(pool, chat_id, next_state, ctx)
+                await query.edit_message_text(
+                    format_ask_payment_type(),
+                    reply_markup=payment_type_keyboard(),
+                    parse_mode="Markdown",
+                )
 
         elif data == "prop_skip":
-            # Skip: go to payment type
+            # Skip: go to payment type with empty properties
+            ctx["properties"] = []
             next_state = state.replace("awaiting_property", "awaiting_payment_type")
             await update_context(pool, chat_id, next_state, ctx)
             await query.edit_message_text(
@@ -150,13 +143,31 @@ async def handle_income_callback(
                 parse_mode="Markdown",
             )
 
-        else:
-            # Normal property: ask payment type
-            next_state = state.replace("awaiting_property", "awaiting_payment_type")
-            await update_context(pool, chat_id, next_state, ctx)
+        elif data == "prop_sup":
+            # SUP is exclusive — clear all others, set only SUP
+            selected = ["prop_sup"]
+            ctx["properties"] = selected
+            await update_context(pool, chat_id, state, ctx)
             await query.edit_message_text(
-                format_ask_payment_type(),
-                reply_markup=payment_type_keyboard(),
+                format_ask_property(),
+                reply_markup=property_toggle_keyboard(selected),
+                parse_mode="Markdown",
+            )
+
+        elif data.startswith("prop_"):
+            # Toggle property in/out of selected list
+            if data in selected:
+                selected.remove(data)
+            else:
+                # If SUP was selected, clear it when adding a normal property
+                if "prop_sup" in selected:
+                    selected.remove("prop_sup")
+                selected.append(data)
+            ctx["properties"] = selected
+            await update_context(pool, chat_id, state, ctx)
+            await query.edit_message_text(
+                format_ask_property(),
+                reply_markup=property_toggle_keyboard(selected),
                 parse_mode="Markdown",
             )
 
@@ -199,7 +210,7 @@ async def handle_income_callback(
         ctx["platform"] = data
 
         # If SUP, skip account type (already set)
-        is_sup = ctx.get("property") == "prop_sup"
+        is_sup = "prop_sup" in ctx.get("properties", [])
         prefix = state.split(":")[0]
 
         if is_sup:
@@ -235,6 +246,9 @@ async def handle_income_callback(
     elif state in ("income:awaiting_dates", "income_manual:awaiting_dates"):
         if data == "dates_skip":
             ctx["dates_skipped"] = True
+            # Lock state to prevent duplicate writes on double-click/retry
+            prefix = state.split(":")[0]
+            await update_context(pool, chat_id, f"{prefix}:finalizing", ctx)
             # Finalize
             await _finalize_and_confirm(pool, chat_id, ctx, query)
 
@@ -272,6 +286,9 @@ async def handle_income_text(
         checkin, checkout = parse_dates_input(text)
         ctx["checkin"] = checkin
         ctx["checkout"] = checkout
+
+        # Lock state to prevent duplicate writes
+        await update_context(pool, chat_id, "income:finalizing", ctx)
 
         # Finalize
         tx_id = await finalize_income(pool, chat_id, ctx)

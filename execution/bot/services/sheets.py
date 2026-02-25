@@ -71,13 +71,13 @@ def append_income_row(data: dict) -> bool:
         B: Day#          — empty (Sheets formula)
         C: Amount        — number
         D: Property      — display name
-        E: Platform      — INST / BC / Airbnb / HutsHub / Direct
+        E: Platform      — Website / Instagram / Booking / HutsHub / AirBnB / Phone / Return
         F: Guest Name    — sender name
         G: Nights        — empty (Sheets formula)
         H: Check-in      — DD.MM.YYYY or empty
         I: Check-out     — DD.MM.YYYY or empty
         J: Payment Type  — Передоплата / Доплата / Оплата / Сапи
-        K: Account Type  — Account / Cash
+        K: Account Type  — Account / Cash / Nestor Account
         L: Notes         — purpose or SUP duration
         M: Month         — e.g. "February 2026"
 

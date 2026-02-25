@@ -181,13 +181,13 @@ Monobank payment screenshot in Telegram group → Google Vision OCR → interact
 | B | Day# | Empty (formula) |
 | C | Amount | Number (UAH) |
 | D | Property | Гніздечко / Чайка / Чапля / SUP Rental |
-| E | Platform | INST / BC / Airbnb / HutsHub / Direct |
+| E | Platform | Website / Instagram / Booking / HutsHub / AirBnB / Phone / Return |
 | F | Guest Name | From Monobank sender field |
 | G | Nights | Empty (formula) |
 | H | Check-in | DD.MM.YYYY or empty |
 | I | Check-out | DD.MM.YYYY or empty |
 | J | Payment Type | Передоплата / Доплата / Оплата / Сапи |
-| K | Account Type | Account / Cash |
+| K | Account Type | Account / Cash / Nestor Account |
 | L | Notes | OCR purpose or SUP duration |
 | M | Month | e.g. "June 2025" |
 
@@ -202,11 +202,14 @@ Monobank payment screenshot in Telegram group → Google Vision OCR → interact
 | `pay_prepay` | Передоплата |
 | `pay_balance` | Доплата |
 | `pay_full` | Оплата |
-| `plat_inst` | INST |
-| `plat_bc` | BC |
-| `plat_airbnb` | Airbnb |
+| `plat_website` | Website |
+| `plat_instagram` | Instagram |
+| `plat_booking` | Booking |
 | `plat_hutshub` | HutsHub |
-| `plat_direct` | Direct |
+| `plat_airbnb` | AirBnB |
+| `plat_phone` | Phone |
+| `plat_return` | Return |
+| `acc_nestor` | Nestor Account |
 | `dur_1h` / `dur_2h` / `dur_3h` / `dur_halfday` / `dur_fullday` | Duration labels |
 
 ## Setup Requirements (for fresh import)

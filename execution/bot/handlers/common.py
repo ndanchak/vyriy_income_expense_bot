@@ -2,7 +2,7 @@
 Shared handler logic used by all flows.
 
 - Cancel handler (/скасувати)
-- Photo router (expense receipt vs income OCR)
+- Photo router (OCR + classify: Monobank → income, other → expense)
 - Callback router (dispatches by session state prefix)
 - Text router (dispatches text input by session state)
 - Finalize functions (write to DB + Sheets)
@@ -19,6 +19,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import (
+    GOOGLE_VISION_API_KEY,
     PROPERTY_MAP,
     PAYMENT_TYPE_MAP,
     PLATFORM_MAP,
@@ -30,7 +31,8 @@ from config import (
 )
 from utils.state import get_session, clear_session
 from utils.formatters import format_cancel_message
-from utils.parsers import convert_date_for_sheets, get_month_label
+from utils.parsers import convert_date_for_sheets, get_month_label, detect_ocr_type, parse_receipt_ocr
+from services.ocr import extract_text_from_image
 from services.sheets import append_income_row, append_expense_row
 
 logger = logging.getLogger(__name__)
@@ -63,22 +65,61 @@ async def handle_cancel_callback(update: Update, context: ContextTypes.DEFAULT_T
 # ---------------------------------------------------------------------------
 
 async def handle_photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Route incoming photos to the correct handler.
+    """Route incoming photos: OCR → classify → income or expense flow.
 
-    - If session state is expense:awaiting_receipt → expense receipt upload
-    - Otherwise → income OCR (default behavior, like Make.com trigger)
+    1. If session state is expense:awaiting_receipt → hint to upload to Drive
+    2. If any other active session exists → error message
+    3. Download photo + OCR
+    4. Classify: Monobank → income, anything else → expense
     """
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
 
     session = await get_session(pool, chat_id)
 
+    # If we're in expense receipt step, show the Drive upload hint
     if session and session.state == "expense:awaiting_receipt":
         from handlers.expense import handle_expense_receipt_photo
         await handle_expense_receipt_photo(update, context)
+        return
+
+    # If any other session is active, warn the user
+    if session:
+        await update.message.reply_text(
+            "⚠️ У вас вже є активна операція. Завершіть її або натисніть /cancel"
+        )
+        return
+
+    # Download photo (highest resolution)
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+    image_bytes = await file.download_as_bytearray()
+
+    # Run OCR
+    ocr_text = await extract_text_from_image(bytes(image_bytes), GOOGLE_VISION_API_KEY)
+
+    if not ocr_text:
+        await update.message.reply_text(
+            "⚠️ Не вдалося розпізнати текст на зображенні. "
+            "Спробуйте ще раз або введіть дані вручну."
+        )
+        return
+
+    logger.info("OCR raw text:\n%s", ocr_text)
+
+    # Classify: Monobank payment or expense receipt
+    ocr_type = detect_ocr_type(ocr_text)
+    logger.info("OCR type detected: %s", ocr_type)
+
+    if ocr_type == "monobank":
+        from handlers.income import handle_photo_with_ocr
+        await handle_photo_with_ocr(update, context, ocr_text)
     else:
-        from handlers.income import handle_photo
-        await handle_photo(update, context)
+        # Default: treat as expense receipt
+        parsed = parse_receipt_ocr(ocr_text)
+        from handlers.expense import handle_receipt_expense
+        await handle_receipt_expense(update, context, parsed)
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +149,11 @@ async def handle_callback_router(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     state = session.state or ""
+
+    # Guard: if already finalizing, ignore duplicate clicks
+    if state.endswith(":finalizing"):
+        await query.answer("⏳ Зберігаємо…")
+        return
 
     if state.startswith("income:") or state.startswith("income_manual:"):
         from handlers.income import handle_income_callback
@@ -158,9 +204,14 @@ async def finalize_income(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
     Returns transaction ID on success, empty string on DB failure.
     """
     # Resolve display labels from callback data
-    property_cb = ctx.get("property", "")
-    property_label = PROPERTY_MAP.get(property_cb, "")
-    is_sup = property_cb == "prop_sup"
+    # Support multi-select properties (list) and legacy single property (string)
+    properties = ctx.get("properties", [])
+    if not properties:
+        single = ctx.get("property", "")
+        properties = [single] if single and single != "prop_skip" else []
+    property_labels = [PROPERTY_MAP.get(p, p) for p in properties if p]
+    property_label = " + ".join(property_labels) if property_labels else ""
+    is_sup = properties == ["prop_sup"]
 
     pay_cb = ctx.get("payment_type", "")
     payment_label = "Сапи" if is_sup else PAYMENT_TYPE_MAP.get(pay_cb, "")
@@ -228,7 +279,7 @@ async def finalize_income(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
                 """,
                 tx_date,
                 amount,
-                property_cb if property_cb != "prop_skip" else None,
+                ",".join(properties) if properties else None,
                 platform_label or None,
                 guest_name or None,
                 payment_label or None,

@@ -69,9 +69,10 @@ Auto-sets: Payment Type = "Сапи", Account Type = "Cash" if purpose contains 
 ```
 🌐 Платформа:
 
-[📸 INST]     [🏨 BC]
-[✈️ Airbnb]   [🔗 HutsHub]
-[📞 Direct]   [⏭ Пропустити]
+[🌐 Website]    [📸 Instagram]
+[🏨 Booking]    [🔗 HutsHub]
+[✈️ AirBnB]     [📞 Phone]
+[↩️ Return]      [⏭ Пропустити]
 ```
 
 **5. Account Type (for non-SUP only):**
@@ -79,7 +80,8 @@ Auto-sets: Payment Type = "Сапи", Account Type = "Cash" if purpose contains 
 ```
 💳 Тип рахунку:
 
-[🏦 Рахунок]  [💵 Готівка]
+[🏦 Рахунок]        [💵 Готівка]
+[👤 Nestor Account]
 ```
 
 **6. Dates:**
@@ -234,9 +236,9 @@ Session is cleared. Bot returns to idle, ready for the next command.
 |---|---|---|
 | Property | Гніздечко, Чайка, Чапля, SUP Rental, Пропустити | prop_gnizd, prop_chaika, prop_chaplia, prop_sup, prop_skip |
 | Payment Type | Передоплата, Доплата, Оплата, Пропустити | pay_prepay, pay_balance, pay_full, pay_skip |
-| Platform | INST, BC, Airbnb, HutsHub, Direct, Пропустити | plat_inst, plat_bc, plat_airbnb, plat_hutshub, plat_direct, plat_skip |
+| Platform | Website, Instagram, Booking, HutsHub, AirBnB, Phone, Return, Пропустити | plat_website, plat_instagram, plat_booking, plat_hutshub, plat_airbnb, plat_phone, plat_return, plat_skip |
 | SUP Duration | 1 год, 2 год, 3 год, Пів дня, Весь день, Пропустити | dur_1h, dur_2h, dur_3h, dur_halfday, dur_fullday, dur_skip |
-| Account Type | Рахунок, Готівка | acc_account, acc_cash |
+| Account Type | Рахунок, Готівка, Nestor Account | acc_account, acc_cash, acc_nestor |
 | Dates | Пропустити дати | dates_skip |
 | Expense Category | Прибирання, Комунальні, Обслуговування, Матеріали, Маркетинг, Інше | exp_cleaning, exp_utilities, exp_maintenance, exp_materials, exp_marketing, exp_other |
 | Expense Property | Гніздечко, Чайка, Чапля, Всі, Пропустити | prop_gnizd, prop_chaika, prop_chaplia, prop_all, prop_skip |
@@ -266,7 +268,7 @@ Visual style:
 
 **"Доходи" tab** — one row per income entry:
 ```
-| 2026-02-19 0:00:00 | [formula] | 2400 | Гніздечко | INST | Коваленко Марина | [formula] | 22.02.2026 | 25.02.2026 | Передоплата | Account | оренда котеджу | February 2026 |
+| 2026-02-19 0:00:00 | [formula] | 2400 | Гніздечко | Instagram | Коваленко Марина | [formula] | 22.02.2026 | 25.02.2026 | Передоплата | Account | оренда котеджу | February 2026 |
 ```
 
 **"Витрати" tab** — one row per expense:
