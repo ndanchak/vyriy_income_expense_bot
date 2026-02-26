@@ -13,6 +13,7 @@ import json
 import logging
 from datetime import datetime
 from decimal import Decimal
+from typing import Union
 
 import asyncpg
 from telegram import Update
@@ -20,6 +21,7 @@ from telegram.ext import ContextTypes
 
 from config import (
     GOOGLE_VISION_API_KEY,
+    ALLOWED_CHAT_IDS,
     PROPERTY_MAP,
     PAYMENT_TYPE_MAP,
     PLATFORM_MAP,
@@ -40,11 +42,61 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Authorization
+# ---------------------------------------------------------------------------
+
+def is_authorized(update: Update) -> bool:
+    """Check if the chat is in the allowed list.
+
+    Returns True if ALLOWED_CHAT_IDS is empty (no restriction configured)
+    or if the chat is explicitly allowed.
+    """
+    if not ALLOWED_CHAT_IDS:
+        return True  # no restriction configured — allow all (dev mode)
+    return update.effective_chat.id in ALLOWED_CHAT_IDS
+
+
+# ---------------------------------------------------------------------------
+# Duplicate detection
+# ---------------------------------------------------------------------------
+
+async def check_duplicate_income(
+    pool: asyncpg.Pool,
+    tx_date: Union[datetime, "datetime.date"],
+    amount: Decimal,
+    guest_name: str,
+) -> bool:
+    """Check if an income transaction with same date, amount, and guest name exists.
+
+    Returns True if a potential duplicate is found.
+    """
+    if not guest_name:
+        return False  # can't check without guest name
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval(
+            """
+            SELECT EXISTS(
+                SELECT 1 FROM transactions
+                WHERE type = 'income'
+                  AND date = $1
+                  AND amount = $2
+                  AND counterparty = $3
+            )
+            """,
+            tx_date, amount, guest_name,
+        )
+    return exists
+
+
+# ---------------------------------------------------------------------------
 # Cancel
 # ---------------------------------------------------------------------------
 
 async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /скасувати command — clear session, return to idle."""
+    if not is_authorized(update):
+        logger.warning("Unauthorized cancel attempt from chat_id=%d", update.effective_chat.id)
+        return
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
     await clear_session(pool, chat_id)
@@ -73,6 +125,9 @@ async def handle_photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE
     3. Download photo + OCR
     4. Classify: Monobank → income, anything else → expense
     """
+    if not is_authorized(update):
+        logger.warning("Unauthorized photo from chat_id=%d", update.effective_chat.id)
+        return
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
@@ -107,7 +162,8 @@ async def handle_photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    logger.info("OCR raw text:\n%s", ocr_text)
+    logger.info("OCR completed: %d characters extracted", len(ocr_text))
+    logger.debug("OCR raw text:\n%s", ocr_text)
 
     # Classify: Monobank payment or expense receipt
     ocr_type = detect_ocr_type(ocr_text)
@@ -133,6 +189,10 @@ async def handle_callback_router(update: Update, context: ContextTypes.DEFAULT_T
     Reads bot_sessions to determine which flow the user is in,
     then delegates to the appropriate handler.
     """
+    if not is_authorized(update):
+        logger.warning("Unauthorized callback from chat_id=%d", update.effective_chat.id)
+        await update.callback_query.answer()
+        return
     query = update.callback_query
     data = query.data
 
@@ -148,6 +208,11 @@ async def handle_callback_router(update: Update, context: ContextTypes.DEFAULT_T
     if not session:
         await query.answer("Немає активної сесії. Надішліть скріншот або введіть команду.")
         return
+
+    # NOTE: No per-user session lock — any authorized team member in the
+    # group chat can continue another member's session (e.g. Ihor sends
+    # screenshot, Ira finishes entering data).  Authorization at the
+    # chat level (is_authorized) is the security boundary.
 
     state = session.state or ""
 
@@ -175,12 +240,17 @@ async def handle_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     Text input is used for: amounts, guest names, dates, vendor names, notes.
     """
+    if not is_authorized(update):
+        return  # silently ignore text from unauthorized chats
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
 
     session = await get_session(pool, chat_id)
     if not session:
         return  # No active session, ignore text
+
+    # NOTE: Any authorized team member can continue the session
+    # (same rationale as callback router — shared team workflow).
 
     state = session.state or ""
 

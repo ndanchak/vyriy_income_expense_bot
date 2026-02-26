@@ -8,6 +8,7 @@ Usage:
     await close_pool()
 """
 
+import ssl
 from pathlib import Path
 
 import asyncpg
@@ -19,9 +20,23 @@ _pool: asyncpg.Pool | None = None
 
 
 async def init_pool(dsn: str, min_size: int = 2, max_size: int = 10) -> asyncpg.Pool:
-    """Create and return the global asyncpg connection pool."""
+    """Create and return the global asyncpg connection pool.
+
+    Enables SSL for non-localhost connections (Railway, remote DBs).
+    Localhost connections skip SSL for local development.
+    """
     global _pool
-    _pool = await asyncpg.create_pool(dsn, min_size=min_size, max_size=max_size)
+
+    # Enable SSL for remote databases (Railway, etc.)
+    ssl_ctx = None
+    is_localhost = any(h in dsn for h in ("localhost", "127.0.0.1", "::1"))
+    if not is_localhost:
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE  # Railway uses self-signed certs
+        logger.info("SSL enabled for remote database connection")
+
+    _pool = await asyncpg.create_pool(dsn, min_size=min_size, max_size=max_size, ssl=ssl_ctx)
     logger.info("Database pool initialized (min=%d, max=%d)", min_size, max_size)
     return _pool
 

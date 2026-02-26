@@ -12,9 +12,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 # Income keyboards
 # ---------------------------------------------------------------------------
 
-def property_keyboard() -> InlineKeyboardMarkup:
+def property_keyboard(show_save_minimal: bool = True) -> InlineKeyboardMarkup:
     """Property selection — Make.com module 7 (legacy single-select)."""
-    return property_toggle_keyboard([])
+    return property_toggle_keyboard([], show_save_minimal=show_save_minimal)
 
 
 # Property button definitions: (callback_data, default_emoji, label)
@@ -26,11 +26,15 @@ _PROPERTY_BUTTONS = [
 ]
 
 
-def property_toggle_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
+def property_toggle_keyboard(
+    selected: list[str],
+    show_save_minimal: bool = True,
+) -> InlineKeyboardMarkup:
     """Multi-select property keyboard with toggle checkmarks.
 
     Tapping a property toggles ✅ on/off. When any property is selected,
     a "Підтвердити" button appears. SUP is exclusive (handled by the callback).
+    show_save_minimal adds a "Зберегти без деталей" quick-save button.
     """
     rows = []
     for i in range(0, len(_PROPERTY_BUTTONS), 2):
@@ -48,6 +52,10 @@ def property_toggle_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(
             f"✅ Підтвердити ({count})", callback_data="prop_confirm"
         )])
+
+    # Quick-save button: skip all details, save with OCR data only
+    if show_save_minimal:
+        rows.append([InlineKeyboardButton("💾 Зберегти без деталей", callback_data="save_minimal")])
 
     # Skip button always available
     rows.append([InlineKeyboardButton("⏭ Пропустити", callback_data="prop_skip")])
@@ -220,6 +228,16 @@ def notes_skip_keyboard() -> InlineKeyboardMarkup:
     """Skip button for notes step."""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⏭ Пропустити", callback_data="notes_skip")],
+    ])
+
+
+def duplicate_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Confirm or cancel when duplicate income detected."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Так, зберегти", callback_data="dup_confirm"),
+            InlineKeyboardButton("❌ Скасувати", callback_data="cancel"),
+        ],
     ])
 
 

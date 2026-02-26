@@ -11,6 +11,8 @@ Production:  Railway auto-deploys via Dockerfile
 import hmac
 import json as _json
 import logging
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,6 +29,7 @@ from telegram.ext import (
 from config import TELEGRAM_BOT_TOKEN, WEBHOOK_URL, WEBHOOK_SECRET, DATABASE_URL
 from database.connection import init_pool, close_pool, run_migration
 from handlers.common import (
+    is_authorized,
     handle_cancel,
     handle_photo_router,
     handle_callback_router,
@@ -91,6 +94,8 @@ async def lifespan(app: FastAPI):
 
     # 5. Set webhook (production) or polling (local dev)
     if WEBHOOK_URL:
+        if not WEBHOOK_URL.startswith("https://"):
+            raise ValueError("WEBHOOK_URL must use HTTPS for security — got: %s" % WEBHOOK_URL[:30])
         webhook_url = f"{WEBHOOK_URL}/webhook"
         await bot_app.bot.set_webhook(
             url=webhook_url,
@@ -127,12 +132,38 @@ api = FastAPI(title="Vyriy House Bot", version="1.0.0", lifespan=lifespan)
 
 
 # ---------------------------------------------------------------------------
+# Rate limiter (simple in-memory, per-IP)
+# ---------------------------------------------------------------------------
+_rate_limit_window = 60  # seconds
+_rate_limit_max = 60     # max requests per window
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_rate_limited(client_ip: str) -> bool:
+    """Check if a client IP has exceeded the rate limit."""
+    now = time.monotonic()
+    bucket = _rate_buckets[client_ip]
+    # Remove expired entries
+    _rate_buckets[client_ip] = [ts for ts in bucket if now - ts < _rate_limit_window]
+    if len(_rate_buckets[client_ip]) >= _rate_limit_max:
+        return True
+    _rate_buckets[client_ip].append(now)
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Webhook endpoint
 # ---------------------------------------------------------------------------
 
 @api.post("/webhook")
 async def webhook(request: Request) -> Response:
     """Telegram webhook endpoint — receives updates from Telegram servers."""
+    # Rate limiting (per client IP)
+    client_ip = request.client.host if request.client else "unknown"
+    if _is_rate_limited(client_ip):
+        logger.warning("Rate limited: %s", client_ip)
+        return Response(status_code=429)
+
     # SECURITY: Reject if webhook secret is not configured
     if not WEBHOOK_SECRET:
         logger.error("WEBHOOK_SECRET not configured — rejecting all webhook requests")
@@ -141,7 +172,7 @@ async def webhook(request: Request) -> Response:
     # Verify secret token (constant-time comparison to prevent timing attacks)
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
     if not hmac.compare_digest(secret, WEBHOOK_SECRET):
-        logger.warning("Webhook secret mismatch")
+        logger.warning("Webhook secret mismatch from %s", client_ip)
         return Response(status_code=403)
 
     # Guard against bot_app not initialized
@@ -163,8 +194,8 @@ async def webhook(request: Request) -> Response:
 
 @api.get("/health")
 async def health():
-    """Health check endpoint for Railway."""
-    return {"status": "ok", "bot": "vyriy-house"}
+    """Health check endpoint for Railway. Minimal response to avoid leaking identity."""
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +204,8 @@ async def health():
 
 async def handle_start(update: Update, context) -> None:
     """Handle /start command."""
+    if not is_authorized(update):
+        return
     await update.message.reply_text(
         "🏠 *Vyriy House Bot*\n"
         "\n"
@@ -188,6 +221,8 @@ async def handle_start(update: Update, context) -> None:
 
 async def handle_help(update: Update, context) -> None:
     """Handle /help command."""
+    if not is_authorized(update):
+        return
     await update.message.reply_text(
         "📖 *Довідка*\n"
         "\n"

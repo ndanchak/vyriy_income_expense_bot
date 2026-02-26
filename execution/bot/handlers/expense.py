@@ -14,7 +14,7 @@ import asyncpg
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import EXPENSE_CATEGORY_MAP, PAID_BY_MAP
+from config import EXPENSE_CATEGORY_MAP, PAYMENT_METHOD_MAP, PAID_BY_MAP
 from database.models import BotSession
 from utils.state import get_session, set_session, update_context, clear_session
 from utils.keyboards import (
@@ -34,7 +34,7 @@ from utils.formatters import (
     format_expense_confirmation,
     format_receipt_ocr_summary,
 )
-from handlers.common import finalize_expense
+from handlers.common import finalize_expense, is_authorized
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,9 @@ async def handle_vitrata_command(update: Update, context: ContextTypes.DEFAULT_T
     Supports fast entry: /expense category;amount;description;paid_by
     Example: /expense Laundry;850;Towel washing;Nestor
     """
+    if not is_authorized(update):
+        logger.warning("Unauthorized /expense from chat_id=%d", update.effective_chat.id)
+        return
     pool: asyncpg.Pool = context.bot_data["db_pool"]
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
@@ -241,6 +244,9 @@ async def handle_expense_callback(
 
     # --- Category ---
     if state == "expense:awaiting_category":
+        if data not in EXPENSE_CATEGORY_MAP:
+            await query.answer("Невідома категорія")
+            return
         ctx["category"] = data
         # If amount is pre-filled (receipt OCR), skip to description
         if ctx.get("amount"):
@@ -258,6 +264,9 @@ async def handle_expense_callback(
 
     # --- Payment Method ---
     elif state == "expense:awaiting_payment_method":
+        if data not in PAYMENT_METHOD_MAP:
+            await query.answer("Невідомий спосіб оплати")
+            return
         ctx["payment_method"] = data
         await update_context(pool, chat_id, "expense:awaiting_paid_by", ctx)
         await query.edit_message_text(
@@ -268,6 +277,9 @@ async def handle_expense_callback(
 
     # --- Paid By ---
     elif state == "expense:awaiting_paid_by":
+        if data not in PAID_BY_MAP:
+            await query.answer("Невідомий платник")
+            return
         ctx["paid_by"] = data
         await update_context(pool, chat_id, "expense:awaiting_receipt", ctx)
         await query.edit_message_text(

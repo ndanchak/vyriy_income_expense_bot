@@ -35,6 +35,15 @@ GOOGLE_DRIVE_FOLDER_ID: str = os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "")
 WEBHOOK_SECRET: str = os.environ.get("WEBHOOK_SECRET", "")
 WEBHOOK_URL: str = os.environ.get("WEBHOOK_URL", "")
 
+# --- Authorization ---
+# Only these chat IDs are allowed to use the bot.
+# Includes the group chat and owner's private chat.
+ALLOWED_CHAT_IDS: set[int] = set()
+if TELEGRAM_GROUP_CHAT_ID:
+    ALLOWED_CHAT_IDS.add(TELEGRAM_GROUP_CHAT_ID)
+if TELEGRAM_OWNER_CHAT_ID:
+    ALLOWED_CHAT_IDS.add(TELEGRAM_OWNER_CHAT_ID)
+
 # ---------------------------------------------------------------------------
 # Callback data → display label mappings
 # ---------------------------------------------------------------------------

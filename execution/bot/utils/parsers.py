@@ -37,20 +37,26 @@ def parse_monobank_ocr(text: str) -> dict:
     # Normalize whitespace: replace non-breaking spaces with regular spaces
     normalized = text.replace("\u00a0", " ")
 
-    sender = _extract(normalized, r"(?:Від|від|От|від кого)[:\s]+([^\n]+)")
+    # "Від/від/від кого" = incoming payment sender; "Кому/кому" = outgoing (return) recipient
+    sender = (
+        _extract(normalized, r"(?:Від|від|От|від кого)[:\s]+([^\n]+)")
+        or _extract(normalized, r"(?:Кому|кому)[:\s]+([^\n]+)")
+    )
 
     # Amount: Google Vision OCR reads ₴ as € (euro sign!) in modern Monobank screenshots.
     # Also handle ₴, грн, UAH for other formats.
     # Actual OCR output looks like: "1 450.00 €" or "4800.00 €"
+    # For returns (outgoing payments), amount may be negative: "-6 200.00 €" or "−6 200.00 €"
     # IMPORTANT: use [ ] (literal space) not \s — \s matches newlines and crosses lines!
     _currency = r"(?:₴|€|грн|UAH)"
+    _sign = r"[−\-]?"  # Unicode minus (U+2212) + ASCII hyphen-minus
     amount_raw = (
         # Pattern 1: number followed by currency sign (handles ₴ OCR'd as €)
-        _extract(normalized, rf"(\d[\d ]*[,.]?\d*)\s*{_currency}")
+        _extract(normalized, rf"({_sign}\d[\d ]*[,.]?\d*)\s*{_currency}")
         # Pattern 2: currency sign before number
-        or _extract(normalized, rf"{_currency}\s*(\d[\d ]*[,.]?\d*)")
+        or _extract(normalized, rf"{_currency}\s*({_sign}\d[\d ]*[,.]?\d*)")
         # Pattern 3: standalone number with decimals as fallback (e.g. "10 000.00")
-        or _extract(normalized, r"(\d[\d ]*\d[,.]\d{2})")
+        or _extract(normalized, rf"({_sign}\d[\d ]*\d[,.]\d{{2}})")
     )
 
     # Date: try Ukrainian month format FIRST (modern Monobank uses "23 лютого 2026").
@@ -87,15 +93,16 @@ def parse_monobank_ocr(text: str) -> dict:
                 purpose = "\n".join(clean_lines).strip() if clean_lines else None
 
     # Clean amount: remove spaces, replace comma with dot (Make.com module 6b logic)
+    # Normalize Unicode minus (U+2212) to ASCII hyphen for Decimal parsing
     amount: Optional[Decimal] = None
     if amount_raw:
-        cleaned = amount_raw.strip().replace(" ", "").replace("\u00a0", "").replace(",", ".")
+        cleaned = amount_raw.strip().replace(" ", "").replace("\u00a0", "").replace(",", ".").replace("−", "-")
         try:
             amount = Decimal(cleaned)
         except (InvalidOperation, ValueError):
             amount = None
-    logger.info("Amount parsing: raw=%r → cleaned=%r → decimal=%s",
-                amount_raw, amount_raw.strip().replace(" ", "").replace(",", ".") if amount_raw else None, amount)
+    logger.info("Amount parsing: found=%s, decimal=%s", bool(amount_raw), amount)
+    logger.debug("Amount parsing detail: raw=%r", amount_raw)
 
     # Clean sender: strip "Від:" / "від:" leftovers
     if sender:
@@ -268,9 +275,10 @@ def parse_receipt_ocr(text: str) -> dict:
     date_str = _extract(normalized, r"(\d{2}[./]\d{2}[./]\d{4})")
 
     logger.info(
-        "Receipt parsing: vendor=%r, amount=%s, date=%r",
-        vendor, amount, date_str,
+        "Receipt parsing: has_vendor=%s, amount=%s, has_date=%s",
+        bool(vendor), amount, bool(date_str),
     )
+    logger.debug("Receipt parsing detail: vendor=%r, date=%r", vendor, date_str)
 
     return {
         "vendor": vendor,

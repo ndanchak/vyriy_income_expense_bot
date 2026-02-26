@@ -268,6 +268,22 @@ All user-facing text is in Ukrainian. The team communicates in Ukrainian. Variab
 
 ---
 
+## Development Rules & Lessons Learned
+
+### 1. Always use `python3` (not `python`)
+This machine does not have `python` aliased. Always use `python3` to run any scripts, tests, or REPL commands.
+
+### 2. Always run tests after modifications — but confirm first
+After any code change, run verification tests (import checks, unit tests, integration tests) to catch issues early. **Always confirm with the user before running tests**, especially if they consume paid API credits or external services.
+
+### 3. Read files before editing
+Always use the Read tool on a file before attempting to Write or Edit it. The tooling enforces this — writing without reading first will fail.
+
+### 4. Test incrementally, not all at once
+When making multi-file changes, test each step individually rather than waiting until the end. This catches issues early and makes debugging easier.
+
+---
+
 ## Summary
 
 You sit between:

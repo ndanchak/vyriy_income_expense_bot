@@ -24,15 +24,22 @@ def format_ocr_summary(parsed: dict) -> str:
     """Format the initial OCR result message — Make.com module 7.
 
     Shows extracted payment data and asks for property selection.
+    Detects returns (negative amounts) and adjusts header/labels.
     """
     amount_str = _format_amount(parsed.get("amount"))
     sender = _escape_md(parsed.get("sender_name", "—"))
     date = _escape_md(parsed.get("date", "—"))
     purpose = _escape_md(parsed.get("purpose", "—"))
+
+    # Detect return (negative amount)
+    is_return = parsed.get("amount") is not None and parsed["amount"] < 0
+    header = "↩️ *Повернення коштів*" if is_return else "💳 *Отримано платіж*"
+    sender_label = "👤 Кому:" if is_return else "👤 Від:"
+
     return (
-        "💳 *Отримано платіж*\n"
+        f"{header}\n"
         "\n"
-        f"👤 Від: {sender}\n"
+        f"{sender_label} {sender}\n"
         f"💰 Сума: {amount_str} ₴\n"
         f"📅 Дата: {date}\n"
         f"📝 Призначення: {purpose}\n"
@@ -75,12 +82,13 @@ def format_income_confirmation(ctx: dict) -> str:
         )
 
     # Property booking confirmation
+    # Fix: show "—" for skipped fields instead of raw callback values like "pay_skip"
     pay_cb = ctx.get("payment_type", "")
-    payment_label = _escape_md(PAYMENT_TYPE_MAP.get(pay_cb, pay_cb))
+    payment_label = _escape_md(PAYMENT_TYPE_MAP.get(pay_cb, "")) if pay_cb and pay_cb != "pay_skip" else "—"
     plat_cb = ctx.get("platform", "")
-    platform_label = _escape_md(PLATFORM_MAP.get(plat_cb, plat_cb))
+    platform_label = _escape_md(PLATFORM_MAP.get(plat_cb, "")) if plat_cb and plat_cb != "plat_skip" else "—"
     acc_cb = ctx.get("account_type", "")
-    account_label = _escape_md(ACCOUNT_TYPE_MAP.get(acc_cb, acc_cb))
+    account_label = _escape_md(ACCOUNT_TYPE_MAP.get(acc_cb, "")) if acc_cb else "—"
     month = _escape_md(ctx.get("month", ""))
 
     lines = [
@@ -244,6 +252,21 @@ def format_ask_expense_notes() -> str:
     return "📝 *Додайте нотатку (або натисніть Пропустити):*"
 
 
+def format_duplicate_warning(ctx: dict) -> str:
+    """Warning that a similar income already exists."""
+    amount_str = _format_amount(ctx.get("amount") or ctx.get("ocr_amount"))
+    sender = _escape_md(ctx.get("guest_name") or ctx.get("ocr_sender", ""))
+    date_str = _escape_md(ctx.get("date") or ctx.get("ocr_date", ""))
+    return (
+        "⚠️ *Можливий дублікат*\n"
+        "\n"
+        f"Запис з тією ж датою ({date_str}), сумою ({amount_str} ₴) "
+        f"та гостем ({sender}) вже існує.\n"
+        "\n"
+        "Зберегти все одно?"
+    )
+
+
 def format_receipt_uploaded() -> str:
     """Confirm receipt was uploaded."""
     return "📎 Чек завантажено!"
@@ -292,16 +315,19 @@ def _escape_md(text: str) -> str:
 
 
 def _format_amount(amount) -> str:
-    """Format amount for display: 2400 → '2 400,00'."""
+    """Format amount for display: 2400 → '2 400,00', -6200 → '−6 200,00'."""
     if amount is None:
         return "—"
     try:
         num = float(amount)
+        is_negative = num < 0
+        num = abs(num)
         # Ukrainian locale: space as thousands separator, comma as decimal
         integer_part = int(num)
         decimal_part = int(round((num - integer_part) * 100))
         int_str = f"{integer_part:,}".replace(",", " ")
-        return f"{int_str},{decimal_part:02d}"
+        formatted = f"{int_str},{decimal_part:02d}"
+        return f"\u2212{formatted}" if is_negative else formatted
     except (ValueError, TypeError):
         return str(amount)
 
