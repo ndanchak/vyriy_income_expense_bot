@@ -1,0 +1,30 @@
+# Secrets and credentials — never include in Docker image
+.env
+.env.example
+../../.env
+../../creds/
+
+# Temporary and intermediate files
+../../.tmp/
+__pycache__/
+*.pyc
+*.pyo
+
+# Test files and screenshots
+test_*.py
+Screenshot*.png
+*.png
+
+# Documentation (not needed in runtime)
+*.md
+*.docx
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
