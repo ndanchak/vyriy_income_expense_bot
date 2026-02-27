@@ -154,6 +154,13 @@ Everything in `.tmp/` can be deleted and regenerated at any time.
 
 Monobank payment screenshot in Telegram group → Google Vision OCR → interactive Telegram buttons (property, payment type, platform, dates) → Google Sheets row in "Доходи" tab.
 
+### Negative Payment Disambiguation
+
+When OCR detects a **negative** amount on a Monobank screenshot (outgoing payment), the bot asks:
+- "Що це?" → [💸 Витрата] [↩️ Повернення гостю]
+- **Витрата** → starts expense flow with pre-filled amount (absolute value), date, vendor (recipient), description (purpose), payment method auto-set to Bank Transfer
+- **Повернення гостю** → starts income flow (marks as return, keeps negative amount)
+
 ### Planned Make.com Blueprint Module Flow
 
 1. **Trigger:** Telegram Watch Messages → filter for photos only
@@ -211,22 +218,26 @@ Monobank payment screenshot in Telegram group → Google Vision OCR → interact
 | `plat_return` | Return |
 | `acc_nestor` | Nestor Account |
 | `dur_1h` / `dur_2h` / `dur_3h` / `dur_halfday` / `dur_fullday` | Duration labels |
-| `exp_laundry` | Laundry |
-| `exp_guest_amenities` | Guest Amenities |
-| `exp_utilities` | Utilities |
-| `exp_marketing` | Marketing |
-| `exp_mgmt_fee` | Management Fee |
-| `exp_maintenance` | Maintenance |
-| `exp_capex` | Capital Expenses |
-| `exp_commissions` | Commissions |
-| `exp_cleaning_admin` | Cleaning and Administration |
-| `exp_chemicals` | Chemicals |
-| `exp_other` | Other |
-| `exp_software` | Software |
-| `exp_depreciation` | Depreciation fund |
+| `exp_rent_utilities` | Rent & Utilities |
+| `exp_salary` | Salary |
 | `exp_taxes` | Taxes |
-| `method_cash` | Cash |
-| `method_transfer` | Bank Transfer |
+| `exp_chemicals` | Chemicals |
+| `exp_cosmetics` | Cosmetics etc |
+| `exp_guest_amenities` | Guest Amenities |
+| `exp_software` | Software |
+| `exp_other` | Other |
+| `exp_depreciation` | Depreciation fund |
+| `exp_advertisement` | Advertisement |
+| `exp_commissions` | Commissions |
+| `exp_laundry` | Laundry |
+| `sub_electricity` / `sub_woods` / `sub_water` / `sub_sewerage` / `sub_internet` / `sub_phone` / `sub_security` / `sub_garbage` / `sub_account_fee` / `sub_other` | Rent & Utilities subcategories |
+| `sub_housekeeper` / `sub_smm` / `sub_zavgosp` / `sub_manager` | Salary subcategories |
+| `sub_yediniy` / `sub_viyskoviy` / `sub_esv` / `sub_tur` / `sub_ep_nestor` / `sub_vz_nestor` | Taxes subcategories |
+| `flow_expense` | Витрата (disambiguation) |
+| `flow_return` | Повернення гостю (disambiguation) |
+| `method_vyriy_card` | VyriY Card |
+| `method_vyriy_transfer` | VyriY Bank Transfer |
+| `method_other` | Other |
 | `paidby_nestor` | Nestor |
 | `paidby_ihor` | Ihor |
 | `paidby_ira` | Ira |

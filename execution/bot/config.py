@@ -147,8 +147,9 @@ EXPENSE_PROPERTY_MAP = {
 
 # Expense payment method
 PAYMENT_METHOD_MAP = {
-    "method_cash": "Cash",
-    "method_transfer": "Bank Transfer",
+    "method_vyriy_card": "VyriY Card",
+    "method_vyriy_transfer": "VyriY Bank Transfer",
+    "method_other": "Other",
 }
 
 # Expense: who paid

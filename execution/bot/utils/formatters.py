@@ -160,6 +160,33 @@ def format_expense_confirmation(ctx: dict) -> str:
     return "\n".join(lines)
 
 
+def format_negative_payment_summary(parsed: dict) -> str:
+    """Format summary for a negative (outgoing) Monobank payment.
+
+    Shown before asking whether it's an expense or a return to a guest.
+    """
+    amount_str = _format_amount(parsed.get("amount"))
+    recipient = _escape_md(parsed.get("sender_name", "—"))
+    date = _escape_md(parsed.get("date", "—"))
+    purpose = _escape_md(parsed.get("purpose", ""))
+
+    lines = [
+        "💳 *Вихідний платіж*",
+        "",
+        f"👤 Кому: {recipient}",
+        f"💰 Сума: {amount_str} ₴",
+        f"📅 Дата: {date}",
+    ]
+
+    if purpose:
+        lines.append(f"📝 Призначення: {purpose}")
+
+    lines.append("")
+    lines.append("❓ *Що це?*")
+
+    return "\n".join(lines)
+
+
 def format_cancel_message() -> str:
     """Cancel confirmation."""
     return "❌ Операцію скасовано"

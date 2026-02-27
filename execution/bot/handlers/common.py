@@ -33,9 +33,13 @@ from config import (
     PAYMENT_METHOD_MAP,
     PAID_BY_MAP,
 )
-from utils.state import get_session, clear_session
-from utils.formatters import format_cancel_message
-from utils.parsers import convert_date_for_sheets, get_month_label, detect_ocr_type, parse_receipt_ocr
+from utils.state import get_session, set_session, clear_session
+from utils.formatters import format_cancel_message, format_negative_payment_summary
+from utils.keyboards import expense_or_return_keyboard
+from utils.parsers import (
+    convert_date_for_sheets, get_month_label, detect_ocr_type,
+    parse_receipt_ocr, parse_monobank_ocr,
+)
 from services.ocr import extract_text_from_image
 from services.sheets import append_income_row, append_expense_row
 
@@ -171,8 +175,32 @@ async def handle_photo_router(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info("OCR type detected: %s", ocr_type)
 
     if ocr_type == "monobank":
-        from handlers.income import handle_photo_with_ocr
-        await handle_photo_with_ocr(update, context, ocr_text)
+        # Parse Monobank OCR to check if amount is negative (outgoing payment)
+        parsed = parse_monobank_ocr(ocr_text)
+        amount = parsed.get("amount")
+
+        if amount is not None and amount < 0:
+            # Negative amount → could be expense OR return to guest.
+            # Ask the user to disambiguate.
+            logger.info("Negative Monobank payment detected (%s), showing disambiguation", amount)
+            session_ctx = {
+                "ocr_sender": parsed["sender_name"],
+                "ocr_amount": str(parsed["amount"]),
+                "ocr_date": parsed["date"],
+                "ocr_purpose": parsed["purpose"],
+                "ocr_text": ocr_text,
+                "source": "ocr",
+            }
+            await set_session(pool, chat_id, user_id, "disambig:awaiting_type", session_ctx)
+            await update.message.reply_text(
+                format_negative_payment_summary(parsed),
+                reply_markup=expense_or_return_keyboard(),
+                parse_mode="Markdown",
+            )
+        else:
+            # Positive or zero amount → income flow
+            from handlers.income import handle_photo_with_ocr
+            await handle_photo_with_ocr(update, context, ocr_text)
     else:
         # Default: treat as expense receipt
         parsed = parse_receipt_ocr(ocr_text)
@@ -222,7 +250,9 @@ async def handle_callback_router(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("⏳ Зберігаємо…")
         return
 
-    if state.startswith("income:") or state.startswith("income_manual:"):
+    if state.startswith("disambig:"):
+        await handle_disambig_callback(update, context, session)
+    elif state.startswith("income:") or state.startswith("income_manual:"):
         from handlers.income import handle_income_callback
         await handle_income_callback(update, context, session)
     elif state.startswith("expense:"):
@@ -230,6 +260,68 @@ async def handle_callback_router(update: Update, context: ContextTypes.DEFAULT_T
         await handle_expense_callback(update, context, session)
     else:
         await query.answer("Невідомий стан. Спробуйте ще раз.")
+
+
+# ---------------------------------------------------------------------------
+# Disambiguation: negative payment → expense or return
+# ---------------------------------------------------------------------------
+
+async def handle_disambig_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session
+) -> None:
+    """Handle the expense-vs-return disambiguation choice.
+
+    When a Monobank screenshot has a negative amount, the user taps:
+    - 'flow_expense' → start expense flow (amount becomes positive, pre-filled)
+    - 'flow_return' → start income flow (keeps negative amount = return)
+    """
+    query = update.callback_query
+    await query.answer()
+
+    pool: asyncpg.Pool = context.bot_data["db_pool"]
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    ctx = dict(session.context)
+    data = query.data
+
+    if data == "flow_expense":
+        # --- Branch into expense flow ---
+        # Convert negative amount to positive for expense tracking
+        amount_raw = ctx.get("ocr_amount", "0")
+        try:
+            amount_abs = abs(Decimal(amount_raw.replace(" ", "").replace(",", ".").replace("−", "-")))
+        except Exception:
+            amount_abs = Decimal("0")
+
+        expense_ctx = {
+            "amount": str(amount_abs),
+            "date": ctx.get("ocr_date", ""),
+            "vendor": ctx.get("ocr_sender", ""),       # recipient → vendor
+            "description": ctx.get("ocr_purpose", ""),  # purpose → description
+            "receipt_url": "",
+            "paid_by": "",
+            "payment_method": "method_vyriy_transfer",   # bank screenshot → VyriY bank transfer
+            "source": "bank_ocr",
+        }
+
+        await set_session(pool, chat_id, user_id, "expense:awaiting_category", expense_ctx)
+
+        from utils.formatters import format_ask_expense_category
+        from utils.keyboards import expense_category_keyboard
+        await query.edit_message_text(
+            format_ask_expense_category(),
+            reply_markup=expense_category_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    elif data == "flow_return":
+        # --- Branch into income flow (return to guest) ---
+        # Keep the original OCR text so the income handler can re-parse as usual
+        ocr_text = ctx.get("ocr_text", "")
+        await clear_session(pool, chat_id)
+
+        from handlers.income import handle_photo_with_ocr
+        await handle_photo_with_ocr(update, context, ocr_text, from_disambiguation=True)
 
 
 # ---------------------------------------------------------------------------

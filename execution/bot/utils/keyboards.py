@@ -213,11 +213,14 @@ def expense_property_keyboard() -> InlineKeyboardMarkup:
 
 
 def payment_method_keyboard() -> InlineKeyboardMarkup:
-    """Expense payment method: Cash or Bank Transfer."""
+    """Expense payment method: VyriY Card, VyriY Bank Transfer, or Other."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💵 Cash", callback_data="method_cash"),
-            InlineKeyboardButton("🏦 Bank Transfer", callback_data="method_transfer"),
+            InlineKeyboardButton("💳 VyriY Card", callback_data="method_vyriy_card"),
+            InlineKeyboardButton("🏦 VyriY Transfer", callback_data="method_vyriy_transfer"),
+        ],
+        [
+            InlineKeyboardButton("👤 Other", callback_data="method_other"),
         ],
     ])
 
@@ -259,6 +262,20 @@ def duplicate_confirm_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("✅ Так, зберегти", callback_data="dup_confirm"),
             InlineKeyboardButton("❌ Скасувати", callback_data="cancel"),
+        ],
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Disambiguation (negative Monobank → expense or return?)
+# ---------------------------------------------------------------------------
+
+def expense_or_return_keyboard() -> InlineKeyboardMarkup:
+    """Disambiguation keyboard: is this outgoing payment an expense or a return?"""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💸 Витрата", callback_data="flow_expense"),
+            InlineKeyboardButton("↩️ Повернення гостю", callback_data="flow_return"),
         ],
     ])
 

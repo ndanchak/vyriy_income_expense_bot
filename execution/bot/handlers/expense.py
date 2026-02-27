@@ -305,12 +305,24 @@ async def handle_expense_callback(
             await query.answer("Невідомий спосіб оплати")
             return
         ctx["payment_method"] = data
-        await update_context(pool, chat_id, "expense:awaiting_paid_by", ctx)
-        await query.edit_message_text(
-            format_ask_expense_paid_by(),
-            reply_markup=paid_by_keyboard(),
-            parse_mode="Markdown",
-        )
+
+        # VyriY Card / VyriY Bank Transfer → auto-set paid_by to Account, skip "who paid"
+        if data in ("method_vyriy_card", "method_vyriy_transfer"):
+            ctx["paid_by"] = "paidby_account"
+            await update_context(pool, chat_id, "expense:awaiting_receipt", ctx)
+            await query.edit_message_text(
+                format_ask_expense_receipt(),
+                reply_markup=receipt_skip_keyboard(),
+                parse_mode="Markdown",
+            )
+        else:
+            # "Other" → ask who paid
+            await update_context(pool, chat_id, "expense:awaiting_paid_by", ctx)
+            await query.edit_message_text(
+                format_ask_expense_paid_by(),
+                reply_markup=paid_by_keyboard(),
+                parse_mode="Markdown",
+            )
 
     # --- Paid By ---
     elif state == "expense:awaiting_paid_by":
@@ -376,12 +388,33 @@ async def handle_expense_text(
 
     elif state == "expense:awaiting_description":
         ctx["description"] = text
-        await update_context(pool, chat_id, "expense:awaiting_payment_method", ctx)
-        await update.message.reply_text(
-            format_ask_expense_payment_method(),
-            reply_markup=payment_method_keyboard(),
-            parse_mode="Markdown",
-        )
+        method = ctx.get("payment_method", "")
+
+        if method in ("method_vyriy_card", "method_vyriy_transfer"):
+            # VyriY payment pre-filled (bank screenshot) → auto-set paid_by, skip to receipt
+            ctx["paid_by"] = "paidby_account"
+            await update_context(pool, chat_id, "expense:awaiting_receipt", ctx)
+            await update.message.reply_text(
+                format_ask_expense_receipt(),
+                reply_markup=receipt_skip_keyboard(),
+                parse_mode="Markdown",
+            )
+        elif method:
+            # Other payment method pre-filled → ask who paid
+            await update_context(pool, chat_id, "expense:awaiting_paid_by", ctx)
+            await update.message.reply_text(
+                format_ask_expense_paid_by(),
+                reply_markup=paid_by_keyboard(),
+                parse_mode="Markdown",
+            )
+        else:
+            # No payment method yet → ask for it
+            await update_context(pool, chat_id, "expense:awaiting_payment_method", ctx)
+            await update.message.reply_text(
+                format_ask_expense_payment_method(),
+                reply_markup=payment_method_keyboard(),
+                parse_mode="Markdown",
+            )
 
     elif state == "expense:awaiting_receipt":
         # Accept a Drive link as the receipt URL

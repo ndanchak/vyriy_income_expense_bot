@@ -53,11 +53,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 async def handle_photo_with_ocr(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, ocr_text: str
+    update: Update, context: ContextTypes.DEFAULT_TYPE, ocr_text: str,
+    from_disambiguation: bool = False,
 ) -> None:
     """Handle Monobank screenshot — parse OCR text and start income flow.
 
     Called by handle_photo_router() in common.py after download + OCR + classification.
+    Also called from disambiguation callback when user chooses "Повернення гостю".
     Session existence is already checked by the router.
 
     Equivalent to Make.com modules 6b-7: parse → show summary → ask property.
@@ -86,11 +88,19 @@ async def handle_photo_with_ocr(
     await set_session(pool, chat_id, user_id, "income:awaiting_property", session_ctx)
 
     # Send summary + property keyboard (Make.com module 7)
-    await update.message.reply_text(
-        format_ocr_summary(parsed),
-        reply_markup=property_keyboard(show_save_minimal=True),
-        parse_mode="Markdown",
-    )
+    # When called from disambiguation callback, edit the existing message
+    if from_disambiguation and update.callback_query:
+        await update.callback_query.edit_message_text(
+            format_ocr_summary(parsed),
+            reply_markup=property_keyboard(show_save_minimal=True),
+            parse_mode="Markdown",
+        )
+    else:
+        await update.message.reply_text(
+            format_ocr_summary(parsed),
+            reply_markup=property_keyboard(show_save_minimal=True),
+            parse_mode="Markdown",
+        )
 
 
 # ---------------------------------------------------------------------------
