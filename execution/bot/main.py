@@ -48,6 +48,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress httpx INFO logs — they contain the bot token in URLs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # ---------------------------------------------------------------------------
 # Telegram bot application (global — initialized on startup)
 # ---------------------------------------------------------------------------
