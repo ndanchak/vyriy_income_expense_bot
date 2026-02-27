@@ -7,6 +7,8 @@ Emojis preserved for visual consistency with the existing Make.com bot.
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from config import EXPENSE_SUBCATEGORY_MAP
+
 
 # ---------------------------------------------------------------------------
 # Income keyboards
@@ -142,37 +144,57 @@ def dates_skip_keyboard() -> InlineKeyboardMarkup:
 # ---------------------------------------------------------------------------
 
 def expense_category_keyboard() -> InlineKeyboardMarkup:
-    """Expense category selection (14 categories)."""
+    """Expense category selection (12 categories).
+
+    Categories with subcategories (Rent & Utilities, Salary, Taxes) will
+    trigger a second keyboard after selection.
+    """
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🧺 Laundry", callback_data="exp_laundry"),
-            InlineKeyboardButton("🛁 Guest Amenities", callback_data="exp_guest_amenities"),
-        ],
-        [
-            InlineKeyboardButton("💡 Utilities", callback_data="exp_utilities"),
-            InlineKeyboardButton("📣 Marketing", callback_data="exp_marketing"),
-        ],
-        [
-            InlineKeyboardButton("💼 Management Fee", callback_data="exp_mgmt_fee"),
-            InlineKeyboardButton("🔧 Maintenance", callback_data="exp_maintenance"),
-        ],
-        [
-            InlineKeyboardButton("🏗 Capital Expenses", callback_data="exp_capex"),
-            InlineKeyboardButton("💸 Commissions", callback_data="exp_commissions"),
-        ],
-        [
-            InlineKeyboardButton("🧹 Cleaning & Admin", callback_data="exp_cleaning_admin"),
-            InlineKeyboardButton("🧪 Chemicals", callback_data="exp_chemicals"),
-        ],
-        [
-            InlineKeyboardButton("💻 Software", callback_data="exp_software"),
-            InlineKeyboardButton("🏦 Depreciation fund", callback_data="exp_depreciation"),
+            InlineKeyboardButton("🏠 Rent & Utilities", callback_data="exp_rent_utilities"),
+            InlineKeyboardButton("👷 Salary", callback_data="exp_salary"),
         ],
         [
             InlineKeyboardButton("📋 Taxes", callback_data="exp_taxes"),
-            InlineKeyboardButton("📋 Other", callback_data="exp_other"),
+            InlineKeyboardButton("🧪 Chemicals", callback_data="exp_chemicals"),
+        ],
+        [
+            InlineKeyboardButton("💄 Cosmetics etc", callback_data="exp_cosmetics"),
+            InlineKeyboardButton("🛁 Guest Amenities", callback_data="exp_guest_amenities"),
+        ],
+        [
+            InlineKeyboardButton("💻 Software", callback_data="exp_software"),
+            InlineKeyboardButton("📦 Other", callback_data="exp_other"),
+        ],
+        [
+            InlineKeyboardButton("🏦 Depreciation fund", callback_data="exp_depreciation"),
+            InlineKeyboardButton("📣 Advertisement", callback_data="exp_advertisement"),
+        ],
+        [
+            InlineKeyboardButton("💸 Commissions", callback_data="exp_commissions"),
+            InlineKeyboardButton("🧺 Laundry", callback_data="exp_laundry"),
         ],
     ])
+
+
+def expense_subcategory_keyboard(category_key: str) -> InlineKeyboardMarkup:
+    """Subcategory keyboard for categories that require a second selection.
+
+    Builds buttons from EXPENSE_SUBCATEGORY_MAP[category_key].
+    Returns None if the category has no subcategories.
+    """
+    subcats = EXPENSE_SUBCATEGORY_MAP.get(category_key, {})
+    items = list(subcats.items())  # [(callback, label), ...]
+
+    rows = []
+    # Pair buttons into rows of 2
+    for i in range(0, len(items), 2):
+        row = []
+        for cb, label in items[i:i + 2]:
+            row.append(InlineKeyboardButton(label, callback_data=cb))
+        rows.append(row)
+
+    return InlineKeyboardMarkup(rows)
 
 
 def expense_property_keyboard() -> InlineKeyboardMarkup:

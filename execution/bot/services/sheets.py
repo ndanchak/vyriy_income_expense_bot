@@ -117,9 +117,9 @@ def append_income_row(data: dict) -> bool:
 def append_expense_row(data: dict) -> bool:
     """Append a row to the 'Витрати' sheet tab.
 
-    Column mapping (10 columns, A-J):
+    Column mapping (11 columns, A-K):
         A: Date           — YYYY-MM-DD 0:00:00
-        B: Category       — Laundry / Utilities / Marketing / ...
+        B: Category       — Rent & Utilities / Salary / Taxes / ...
         C: Amount         — number
         D: Description    — free text describing the expense
         E: Payment Method — Cash / Bank Transfer
@@ -128,6 +128,7 @@ def append_expense_row(data: dict) -> bool:
         H: Vendor         — vendor name (from OCR, usually empty)
         I: Property       — Гніздечко / Чайка / Чапля / Всі / empty
         J: Notes          — free text (not asked interactively, usually empty)
+        K: Subcategory    — Electricity / Housekeeper / Єдиний податок / ... or empty
 
     Returns True on success, False on failure.
     """
@@ -143,10 +144,11 @@ def append_expense_row(data: dict) -> bool:
             data.get("description", ""),       # D: Description
             data.get("payment_method", ""),    # E: Payment Method
             data.get("paid_by", ""),           # F: Paid By
-            data.get("receipt_url", ""),        # G: Receipt Link
+            data.get("receipt_url", ""),       # G: Receipt Link
             data.get("vendor", ""),            # H: Vendor
             data.get("property", ""),          # I: Property
             data.get("notes", ""),             # J: Notes
+            data.get("subcategory", ""),       # K: Subcategory (blank for non-subcategory cats)
         ])
 
         worksheet.append_row(row, value_input_option="USER_ENTERED")

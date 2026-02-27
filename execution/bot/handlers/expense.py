@@ -14,11 +14,12 @@ import asyncpg
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import EXPENSE_CATEGORY_MAP, PAYMENT_METHOD_MAP, PAID_BY_MAP
+from config import EXPENSE_CATEGORY_MAP, EXPENSE_SUBCATEGORY_MAP, PAYMENT_METHOD_MAP, PAID_BY_MAP
 from database.models import BotSession
 from utils.state import get_session, set_session, update_context, clear_session
 from utils.keyboards import (
     expense_category_keyboard,
+    expense_subcategory_keyboard,
     payment_method_keyboard,
     paid_by_keyboard,
     receipt_skip_keyboard,
@@ -26,6 +27,7 @@ from utils.keyboards import (
 )
 from utils.formatters import (
     format_ask_expense_category,
+    format_ask_expense_subcategory,
     format_ask_expense_amount,
     format_ask_expense_description,
     format_ask_expense_payment_method,
@@ -248,7 +250,42 @@ async def handle_expense_callback(
             await query.answer("Невідома категорія")
             return
         ctx["category"] = data
-        # If amount is pre-filled (receipt OCR), skip to description
+        ctx["subcategory"] = ""  # reset subcategory on new category selection
+
+        # Check if this category has subcategories
+        if data in EXPENSE_SUBCATEGORY_MAP:
+            await update_context(pool, chat_id, "expense:awaiting_subcategory", ctx)
+            category_label = EXPENSE_CATEGORY_MAP[data]
+            await query.edit_message_text(
+                format_ask_expense_subcategory(category_label),
+                reply_markup=expense_subcategory_keyboard(data),
+                parse_mode="Markdown",
+            )
+            return
+
+        # No subcategory — proceed to amount or description (receipt OCR pre-fill)
+        if ctx.get("amount"):
+            await update_context(pool, chat_id, "expense:awaiting_description", ctx)
+            await query.edit_message_text(
+                format_ask_expense_description(),
+                parse_mode="Markdown",
+            )
+        else:
+            await update_context(pool, chat_id, "expense:awaiting_amount", ctx)
+            await query.edit_message_text(
+                format_ask_expense_amount(),
+                parse_mode="Markdown",
+            )
+
+    # --- Subcategory ---
+    elif state == "expense:awaiting_subcategory":
+        cat_key = ctx.get("category", "")
+        valid_subcats = EXPENSE_SUBCATEGORY_MAP.get(cat_key, {})
+        if data not in valid_subcats:
+            await query.answer("Невідома підкатегорія")
+            return
+        ctx["subcategory"] = data
+        # Proceed to amount or description (receipt OCR pre-fill)
         if ctx.get("amount"):
             await update_context(pool, chat_id, "expense:awaiting_description", ctx)
             await query.edit_message_text(

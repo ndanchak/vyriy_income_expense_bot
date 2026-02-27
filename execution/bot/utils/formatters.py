@@ -14,6 +14,7 @@ from config import (
     SUP_DURATION_MAP,
     ACCOUNT_TYPE_MAP,
     EXPENSE_CATEGORY_MAP,
+    EXPENSE_SUBCATEGORY_MAP,
     EXPENSE_PROPERTY_MAP,
     PAYMENT_METHOD_MAP,
     PAID_BY_MAP,
@@ -125,6 +126,13 @@ def format_expense_confirmation(ctx: dict) -> str:
     """Format expense confirmation message."""
     cat_cb = ctx.get("category", "")
     category_label = _escape_md(EXPENSE_CATEGORY_MAP.get(cat_cb, cat_cb))
+
+    # Subcategory: look it up in the parent category's submap
+    sub_cb = ctx.get("subcategory", "")
+    subcat_label = ""
+    if sub_cb and cat_cb in EXPENSE_SUBCATEGORY_MAP:
+        subcat_label = _escape_md(EXPENSE_SUBCATEGORY_MAP[cat_cb].get(sub_cb, sub_cb))
+
     amount_str = _format_amount(ctx.get("amount"))
     description = _escape_md(ctx.get("description", "—"))
     method_cb = ctx.get("payment_method", "")
@@ -133,10 +141,13 @@ def format_expense_confirmation(ctx: dict) -> str:
     paidby_label = _escape_md(PAID_BY_MAP.get(paidby_cb, paidby_cb))
     receipt_url = _escape_md(ctx.get("receipt_url", ""))
 
+    # Show "Category / Subcategory" when subcategory exists
+    cat_display = f"{category_label} / {subcat_label}" if subcat_label else category_label
+
     lines = [
         "✅ *Витрату записано*",
         "",
-        f"📂 Категорія: {category_label}",
+        f"📂 Категорія: {cat_display}",
         f"💰 Сума: {amount_str} ₴",
         f"📝 Опис: {description}",
         f"💳 Оплата: {method_label}",
@@ -205,6 +216,11 @@ def format_ask_sup_duration() -> str:
 def format_ask_expense_category() -> str:
     """Prompt for expense category."""
     return "📂 *Категорія витрати:*"
+
+
+def format_ask_expense_subcategory(category_label: str) -> str:
+    """Prompt for expense subcategory after a parent category is selected."""
+    return f"📂 *{_escape_md(category_label)}* — оберіть підкатегорію:"
 
 
 def format_ask_expense_property() -> str:

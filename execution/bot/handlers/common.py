@@ -28,6 +28,7 @@ from config import (
     SUP_DURATION_MAP,
     ACCOUNT_TYPE_MAP,
     EXPENSE_CATEGORY_MAP,
+    EXPENSE_SUBCATEGORY_MAP,
     EXPENSE_PROPERTY_MAP,
     PAYMENT_METHOD_MAP,
     PAID_BY_MAP,
@@ -410,6 +411,12 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
     cat_cb = ctx.get("category", "")
     category_label = EXPENSE_CATEGORY_MAP.get(cat_cb, cat_cb)
 
+    # Resolve subcategory label (empty string for categories without subcategories)
+    sub_cb = ctx.get("subcategory", "")
+    subcategory_label = ""
+    if sub_cb and cat_cb in EXPENSE_SUBCATEGORY_MAP:
+        subcategory_label = EXPENSE_SUBCATEGORY_MAP[cat_cb].get(sub_cb, sub_cb)
+
     method_cb = ctx.get("payment_method", "")
     method_label = PAYMENT_METHOD_MAP.get(method_cb, method_cb)
 
@@ -472,6 +479,7 @@ async def finalize_expense(pool: asyncpg.Pool, chat_id: int, ctx: dict) -> str:
         "vendor": vendor,
         "property": property_label,
         "notes": notes,
+        "subcategory": subcategory_label,   # blank for non-subcategory categories
     }
 
     try:

@@ -90,22 +90,51 @@ ACCOUNT_TYPE_MAP = {
     "acc_nestor": "Nestor Account",
 }
 
-# Expense categories (14 categories, English labels)
+# Expense categories (12 categories)
 EXPENSE_CATEGORY_MAP = {
-    "exp_laundry": "Laundry",
-    "exp_guest_amenities": "Guest Amenities",
-    "exp_utilities": "Utilities",
-    "exp_marketing": "Marketing",
-    "exp_mgmt_fee": "Management Fee",
-    "exp_maintenance": "Maintenance",
-    "exp_capex": "Capital Expenses",
-    "exp_commissions": "Commissions",
-    "exp_cleaning_admin": "Cleaning and Administration",
-    "exp_chemicals": "Chemicals",
-    "exp_other": "Other",
-    "exp_software": "Software",
-    "exp_depreciation": "Depreciation fund",
+    "exp_rent_utilities": "Rent & Utilities",
+    "exp_salary": "Salary",
     "exp_taxes": "Taxes",
+    "exp_chemicals": "Chemicals",
+    "exp_cosmetics": "Cosmetics etc",
+    "exp_guest_amenities": "Guest Amenities",
+    "exp_software": "Software",
+    "exp_other": "Other",
+    "exp_depreciation": "Depreciation fund",
+    "exp_advertisement": "Advertisement",
+    "exp_commissions": "Commissions",
+    "exp_laundry": "Laundry",
+}
+
+# Subcategories for categories that require a second selection.
+# Keys are category callback values; values are {sub_callback: label} dicts.
+EXPENSE_SUBCATEGORY_MAP: dict[str, dict[str, str]] = {
+    "exp_rent_utilities": {
+        "sub_electricity": "Electricity",
+        "sub_woods": "Woods",
+        "sub_water": "Water",
+        "sub_sewerage": "Sewerage",
+        "sub_internet": "Internet",
+        "sub_phone": "Phone",
+        "sub_security": "Security",
+        "sub_garbage": "Garbage",
+        "sub_account_fee": "Account fee",
+        "sub_other": "Other",
+    },
+    "exp_salary": {
+        "sub_housekeeper": "Housekeeper",
+        "sub_smm": "SMM",
+        "sub_zavgosp": "Zavgosp",
+        "sub_manager": "Manager",
+    },
+    "exp_taxes": {
+        "sub_yediniy": "Єдиний податок",
+        "sub_viyskoviy": "Військовий збір",
+        "sub_esv": "ЄСВ",
+        "sub_tur": "Тур. Збір",
+        "sub_ep_nestor": "ЄП Нестор",
+        "sub_vz_nestor": "ВЗ Нестор",
+    },
 }
 
 # Expense property (includes "Всі" option)
