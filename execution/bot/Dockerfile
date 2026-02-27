@@ -15,5 +15,8 @@ COPY . .
 # Switch to non-root user
 USER appuser
 
-# Railway sets PORT automatically
-CMD uvicorn main:api --host 0.0.0.0 --port ${PORT:-8000}
+# Tell Railway which port to route traffic to
+EXPOSE 8080
+
+# Railway sets PORT automatically; default to 8080 if not set
+CMD uvicorn main:api --host 0.0.0.0 --port ${PORT:-8080}
