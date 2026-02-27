@@ -38,10 +38,17 @@ def parse_monobank_ocr(text: str) -> dict:
     normalized = text.replace("\u00a0", " ")
 
     # "Від/від/від кого" = incoming payment sender; "Кому/кому" = outgoing (return) recipient
+    # IMPORTANT: anchor to line start to avoid matching "від" in purpose text
+    # (e.g., "заяви від 11.01.2026" → would incorrectly extract date as sender)
     sender = (
-        _extract(normalized, r"(?:Від|від|От|від кого)[:\s]+([^\n]+)")
-        or _extract(normalized, r"(?:Кому|кому)[:\s]+([^\n]+)")
+        _extract(normalized, r"(?:^|\n)\s*(?:Від|від|От|від кого)[:\s]+([^\n]+)")
+        or _extract(normalized, r"(?:^|\n)\s*(?:Кому|кому)[:\s]+([^\n]+)")
     )
+
+    # Fallback for unlabeled bank formats (e.g., PrivatBank shows name without
+    # "Від:"/"Кому:" labels — just the counterparty name as the first line)
+    if not sender:
+        sender = _extract_name_unlabeled(normalized)
 
     # Amount: Google Vision OCR reads ₴ as € (euro sign!) in modern Monobank screenshots.
     # Also handle ₴, грн, UAH for other formats.
@@ -114,6 +121,39 @@ def parse_monobank_ocr(text: str) -> dict:
         "date": date_str.strip() if date_str else "",
         "purpose": purpose.strip() if purpose else "",
     }
+
+
+def _extract_name_unlabeled(text: str) -> Optional[str]:
+    """Extract person name from unlabeled bank screenshot (e.g., PrivatBank).
+
+    PrivatBank shows the counterparty name as the first short text line
+    without "Від:"/"Кому:" labels. Returns the first line that looks
+    like a person name (short, contains letters, not a known UI element).
+    """
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line or len(line) < 2 or len(line) > 40:
+            continue
+        # Skip lines starting with digit or minus sign (amounts, dates)
+        if re.match(r"^[−\-+\d]", line):
+            continue
+        # Skip pure number/symbol lines
+        if re.match(r"^[\d\s.,:;/€₴\-−+()]+$", line):
+            continue
+        # Skip known bank/app UI headers
+        if re.match(
+            r"^(Приватбанк|PrivatBank|Приват24|Privat24|Моно|Mono|monobank|Монобанк)",
+            line, re.IGNORECASE,
+        ):
+            continue
+        # Must contain Cyrillic or Latin letters
+        if not re.search(r"[а-яА-ЯіїєґІЇЄҐa-zA-Z]", line):
+            continue
+        # Person names are typically 1-4 words
+        if len(line.split()) > 4:
+            continue
+        return line
+    return None
 
 
 def _extract_ukrainian_date(text: str) -> Optional[str]:

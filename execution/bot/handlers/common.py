@@ -316,12 +316,33 @@ async def handle_disambig_callback(
 
     elif data == "flow_return":
         # --- Branch into income flow (return to guest) ---
-        # Keep the original OCR text so the income handler can re-parse as usual
+        # Pre-fill all fields and skip payment type, platform, dates.
+        # Only ask for property selection before finalizing.
         ocr_text = ctx.get("ocr_text", "")
-        await clear_session(pool, chat_id)
+        parsed = parse_monobank_ocr(ocr_text)
 
-        from handlers.income import handle_photo_with_ocr
-        await handle_photo_with_ocr(update, context, ocr_text, from_disambiguation=True)
+        return_ctx = {
+            "ocr_sender": parsed["sender_name"],
+            "ocr_amount": str(parsed["amount"]) if parsed["amount"] else "",
+            "ocr_date": parsed["date"],
+            "ocr_purpose": parsed["purpose"],
+            "source": "ocr",
+            "is_return": True,
+            "payment_type": "",              # returns don't need payment type
+            "platform": "plat_return",       # auto-set platform to Return
+            "account_type": "acc_account",   # default
+            "dates_skipped": True,
+        }
+
+        await set_session(pool, chat_id, user_id, "income:awaiting_property", return_ctx)
+
+        from utils.formatters import format_ocr_summary
+        from utils.keyboards import property_keyboard
+        await query.edit_message_text(
+            format_ocr_summary(parsed),
+            reply_markup=property_keyboard(show_save_minimal=True),
+            parse_mode="Markdown",
+        )
 
 
 # ---------------------------------------------------------------------------

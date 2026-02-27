@@ -379,6 +379,14 @@ def _get_skip_warnings(ctx: dict) -> list[str]:
     """Generate warning messages for skipped fields."""
     warnings = []
 
+    # Returns: payment type, platform, and dates are intentionally pre-set/skipped
+    # — only warn about missing property
+    if ctx.get("is_return"):
+        properties = ctx.get("properties", [])
+        if not properties and ctx.get("property", "") in ("prop_skip", ""):
+            warnings.append("⚠️ Об'єкт: не вказано — оновіть вручну")
+        return warnings
+
     # Property: check new multi-select format (empty list = skipped)
     properties = ctx.get("properties", [])
     if not properties and ctx.get("property", "") in ("prop_skip", ""):

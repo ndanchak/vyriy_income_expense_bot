@@ -153,7 +153,30 @@ async def handle_income_callback(
                     parse_mode="Markdown",
                 )
             else:
-                # Normal property: ask payment type
+                if ctx.get("is_return"):
+                    # Return flow: skip payment type, platform, dates → finalize
+                    prefix = state.split(":")[0]
+                    await update_context(pool, chat_id, f"{prefix}:finalizing", ctx)
+                    await _pre_finalize(pool, chat_id, ctx, query, prefix)
+                else:
+                    # Normal property: ask payment type
+                    next_state = state.replace("awaiting_property", "awaiting_payment_type")
+                    await update_context(pool, chat_id, next_state, ctx)
+                    await query.edit_message_text(
+                        format_ask_payment_type(),
+                        reply_markup=payment_type_keyboard(),
+                        parse_mode="Markdown",
+                    )
+
+        elif data == "prop_skip":
+            # Skip: go to payment type with empty properties
+            ctx["properties"] = []
+            if ctx.get("is_return"):
+                # Return flow: skip payment type, platform, dates → finalize
+                prefix = state.split(":")[0]
+                await update_context(pool, chat_id, f"{prefix}:finalizing", ctx)
+                await _pre_finalize(pool, chat_id, ctx, query, prefix)
+            else:
                 next_state = state.replace("awaiting_property", "awaiting_payment_type")
                 await update_context(pool, chat_id, next_state, ctx)
                 await query.edit_message_text(
@@ -161,17 +184,6 @@ async def handle_income_callback(
                     reply_markup=payment_type_keyboard(),
                     parse_mode="Markdown",
                 )
-
-        elif data == "prop_skip":
-            # Skip: go to payment type with empty properties
-            ctx["properties"] = []
-            next_state = state.replace("awaiting_property", "awaiting_payment_type")
-            await update_context(pool, chat_id, next_state, ctx)
-            await query.edit_message_text(
-                format_ask_payment_type(),
-                reply_markup=payment_type_keyboard(),
-                parse_mode="Markdown",
-            )
 
         elif data == "prop_sup":
             # SUP is exclusive — clear all others, set only SUP
