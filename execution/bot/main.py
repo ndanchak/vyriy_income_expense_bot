@@ -91,6 +91,9 @@ async def lifespan(app: FastAPI):
     # Text (amounts, names, dates, notes)
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_router))
 
+    # Error handler — log all unhandled exceptions from handlers
+    bot_app.add_error_handler(_error_handler)
+
     # 4. Initialize and start bot
     await bot_app.initialize()
     await bot_app.start()
@@ -155,6 +158,15 @@ def _is_rate_limited(client_ip: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Error handler
+# ---------------------------------------------------------------------------
+
+async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log unhandled exceptions from handlers."""
+    logger.error("Unhandled exception in handler: %s", context.error, exc_info=context.error)
+
+
+# ---------------------------------------------------------------------------
 # Webhook endpoint
 # ---------------------------------------------------------------------------
 
@@ -189,9 +201,12 @@ async def webhook(request: Request) -> Response:
         logger.warning("Webhook payload too large: %d bytes", len(body))
         return Response(status_code=413)
 
-    data = _json.loads(body)
-    update = Update.de_json(data, bot_app.bot)
-    await bot_app.process_update(update)
+    try:
+        data = _json.loads(body)
+        update = Update.de_json(data, bot_app.bot)
+        await bot_app.process_update(update)
+    except Exception as e:
+        logger.error("Webhook processing failed: %s", e, exc_info=True)
     return Response(status_code=200)
 
 

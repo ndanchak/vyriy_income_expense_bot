@@ -244,6 +244,8 @@ async def handle_expense_callback(
     data = query.data
     ctx = dict(session.context)
 
+    logger.info("Expense callback: chat_id=%d state=%s data=%s", chat_id, state, data)
+
     # --- Category ---
     if state == "expense:awaiting_category":
         if data not in EXPENSE_CATEGORY_MAP:
@@ -366,6 +368,8 @@ async def handle_expense_text(
     text = update.message.text.strip()
     ctx = dict(session.context)
 
+    logger.info("Expense text handler: chat_id=%d state=%s len=%d", chat_id, state, len(text))
+
     if state == "expense:awaiting_amount":
         # Parse amount
         cleaned = text.replace(" ", "").replace("\u00a0", "").replace(",", ".")
@@ -389,11 +393,13 @@ async def handle_expense_text(
     elif state == "expense:awaiting_description":
         ctx["description"] = text
         method = ctx.get("payment_method", "")
+        logger.info("Description received: chat_id=%d method=%s", chat_id, method)
 
         if method in ("method_vyriy_card", "method_vyriy_transfer"):
             # VyriY payment pre-filled (bank screenshot) → auto-set paid_by, skip to receipt
             ctx["paid_by"] = "paidby_account"
             await update_context(pool, chat_id, "expense:awaiting_receipt", ctx)
+            logger.info("Expense flow → awaiting_receipt (VyriY auto paid_by): chat_id=%d", chat_id)
             await update.message.reply_text(
                 format_ask_expense_receipt(),
                 reply_markup=receipt_skip_keyboard(),
@@ -402,6 +408,7 @@ async def handle_expense_text(
         elif method:
             # Other payment method pre-filled → ask who paid
             await update_context(pool, chat_id, "expense:awaiting_paid_by", ctx)
+            logger.info("Expense flow → awaiting_paid_by: chat_id=%d", chat_id)
             await update.message.reply_text(
                 format_ask_expense_paid_by(),
                 reply_markup=paid_by_keyboard(),
@@ -410,6 +417,7 @@ async def handle_expense_text(
         else:
             # No payment method yet → ask for it
             await update_context(pool, chat_id, "expense:awaiting_payment_method", ctx)
+            logger.info("Expense flow → awaiting_payment_method: chat_id=%d", chat_id)
             await update.message.reply_text(
                 format_ask_expense_payment_method(),
                 reply_markup=payment_method_keyboard(),

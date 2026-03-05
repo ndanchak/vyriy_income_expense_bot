@@ -305,6 +305,8 @@ async def handle_disambig_callback(
         }
 
         await set_session(pool, chat_id, user_id, "expense:awaiting_category", expense_ctx)
+        logger.info("Disambig → expense flow: chat_id=%d amount=%s method=%s",
+                     chat_id, expense_ctx.get("amount"), expense_ctx.get("payment_method"))
 
         from utils.formatters import format_ask_expense_category
         from utils.keyboards import expense_category_keyboard
@@ -361,12 +363,14 @@ async def handle_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     session = await get_session(pool, chat_id)
     if not session:
+        logger.debug("Text from chat_id=%d ignored — no active session", chat_id)
         return  # No active session, ignore text
 
     # NOTE: Any authorized team member can continue the session
     # (same rationale as callback router — shared team workflow).
 
     state = session.state or ""
+    logger.info("Text routed: chat_id=%d state=%s len=%d", chat_id, state, len(update.message.text or ""))
 
     if state.startswith("income:"):
         from handlers.income import handle_income_text
@@ -377,6 +381,8 @@ async def handle_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif state.startswith("expense:"):
         from handlers.expense import handle_expense_text
         await handle_expense_text(update, context, session)
+    else:
+        logger.warning("Text from chat_id=%d in unhandled state: %s", chat_id, state)
 
 
 # ---------------------------------------------------------------------------
