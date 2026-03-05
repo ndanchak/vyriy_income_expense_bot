@@ -204,6 +204,15 @@ async def webhook(request: Request) -> Response:
 
     try:
         data = _json.loads(body)
+        # Log update type for debugging
+        update_type = "unknown"
+        if "message" in data:
+            update_type = "message"
+        elif "callback_query" in data:
+            update_type = "callback_query"
+        elif "edited_message" in data:
+            update_type = "edited_message"
+        logger.info("Webhook update: type=%s id=%s", update_type, data.get("update_id"))
         update = Update.de_json(data, bot_app.bot)
         await bot_app.process_update(update)
     except Exception as e:

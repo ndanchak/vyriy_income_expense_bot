@@ -356,14 +356,17 @@ async def handle_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     Text input is used for: amounts, guest names, dates, vendor names, notes.
     """
+    chat_id = update.effective_chat.id
+    logger.info("Text handler entered: chat_id=%d", chat_id)
+
     if not is_authorized(update):
+        logger.info("Text from chat_id=%d rejected — not authorized", chat_id)
         return  # silently ignore text from unauthorized chats
     pool: asyncpg.Pool = context.bot_data["db_pool"]
-    chat_id = update.effective_chat.id
 
     session = await get_session(pool, chat_id)
     if not session:
-        logger.debug("Text from chat_id=%d ignored — no active session", chat_id)
+        logger.info("Text from chat_id=%d ignored — no active session", chat_id)
         return  # No active session, ignore text
 
     # NOTE: Any authorized team member can continue the session
